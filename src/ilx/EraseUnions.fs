@@ -65,7 +65,8 @@ type UnionReprDecisions<'Union,'Alt,'Type>
            isStruct:'Union->bool,
            nameOfAlt : 'Alt -> string,
            makeRootType: 'Union -> 'Type,
-           makeNestedType: 'Union * string -> 'Type) =
+           makeNestedType: 'Union * string -> 'Type,
+           hasHelpers: 'Union->IlxUnionHasHelpers) =
 
     static let TaggingThresholdFixedConstant = 4
 
@@ -79,7 +80,10 @@ type UnionReprDecisions<'Union,'Alt,'Type>
             let alts = getAlternatives cu
             if alts.Length = 1 then 
                 SingleCase
-            elif useVirtualTag cu then
+            elif
+                not (isStruct cu) &&
+                not (repr.RepresentAllAlternativesAsConstantFieldsInRootClass cu) &&
+                (useVirtualTag cu || (match hasHelpers cu with NoHelpers | AllHelpers -> true | _ -> false)) then
                 VirtualTag
             elif
                 not (isStruct cu) &&
@@ -178,7 +182,8 @@ let cuspecRepr =
          (fun cuspec -> cuspec.Boxity = ILBoxity.AsValue),
          (fun (alt:IlxUnionAlternative) -> alt.Name),
          (fun cuspec -> cuspec.EnclosingType),
-         (fun (cuspec,nm) -> mkILNamedTyRaw cuspec.Boxity (mkILTyRefInTyRef (mkCasesTypeRef cuspec, nm)) cuspec.GenericArgs))
+         (fun (cuspec,nm) -> mkILNamedTyRaw cuspec.Boxity (mkILTyRefInTyRef (mkCasesTypeRef cuspec, nm)) cuspec.GenericArgs),
+         (fun (cuspec:IlxUnionSpec) -> cuspec.HasHelpers))
 
 type NoTypesGeneratedViaThisReprDecider = NoTypesGeneratedViaThisReprDecider
 let cudefRepr = 
@@ -191,7 +196,8 @@ let cudefRepr =
          (fun (td,_cud) -> match td.tdKind with ILTypeDefKind.ValueType -> true | _ -> false),
          (fun (alt:IlxUnionAlternative) -> alt.Name),
          (fun (_td,_cud) -> NoTypesGeneratedViaThisReprDecider),
-         (fun ((_td,_cud),_nm) -> NoTypesGeneratedViaThisReprDecider))
+         (fun ((_td,_cud),_nm) -> NoTypesGeneratedViaThisReprDecider),
+         (fun (_td,cud) -> cud.cudHasHelpers))
 
 
 let mkTesterName nm = "Is" + nm
