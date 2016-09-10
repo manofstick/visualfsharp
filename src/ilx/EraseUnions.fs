@@ -73,25 +73,30 @@ type UnionReprDecisions<'Union,'Alt,'Type>
     member repr.RepresentAllAlternativesAsConstantFieldsInRootClass cu = 
         cu |> getAlternatives |> Array.forall isNullary
 
-    member repr.DiscriminationTechnique cu = 
-        if isList cu then 
-            TailOrNull
+    member repr.DiscriminationTechnique cu =
+        if isList cu then TailOrNull
         else
-            let alts = getAlternatives cu
-            if alts.Length = 1 then 
-                SingleCase
-            elif
-                not (isStruct cu) &&
-                not (repr.RepresentAllAlternativesAsConstantFieldsInRootClass cu) &&
-                (useVirtualTag cu || (match hasHelpers cu with NoHelpers | AllHelpers -> true | _ -> false)) then
-                VirtualTag
-            elif
-                not (isStruct cu) &&
-                alts.Length < TaggingThresholdFixedConstant &&
-                not (repr.RepresentAllAlternativesAsConstantFieldsInRootClass cu)  then 
-                RuntimeTypes
-            else
-                IntegerTag
+            match getAlternatives cu with
+            | [|_|] -> SingleCase
+            | alts ->
+                let _nullPermitted    = nullPermitted cu
+                let _hasSingleNullary = alts |> Array.existsOne isNullary 
+                let _hasNonNullary    = alts |> Array.exists (isNullary >> not) 
+                let _hasAllNullary    = alts |> Array.forall isNullary
+
+                if
+                    not (_nullPermitted && _hasSingleNullary && _hasNonNullary && alts.Length < TaggingThresholdFixedConstant) &&
+                    not (isStruct cu) &&
+                    not (_hasAllNullary) &&
+                    (useVirtualTag cu || (match hasHelpers cu with NoHelpers | AllHelpers -> true | _ -> false)) then
+                    VirtualTag
+                elif
+                    not (isStruct cu) &&
+                    alts.Length < TaggingThresholdFixedConstant &&
+                    not (_hasAllNullary)  then 
+                    RuntimeTypes
+                else
+                    IntegerTag
 
     // WARNING: this must match IsUnionTypeWithNullAsTrueValue in the F# compiler 
     member repr.RepresentAlternativeAsNull (cu,alt) = 
