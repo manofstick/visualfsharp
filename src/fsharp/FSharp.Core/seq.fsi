@@ -26,14 +26,9 @@ namespace Microsoft.FSharp.Collections
                 abstract ProcessNext : input:'T -> bool
                 interface ISeqComponent
 
-            type Fold<'T> =
-                inherit SeqConsumer<'T,'T>
-                new : folder:('T->'T->'T) * initialState:'T -> Fold<'T>
-                member Folded : 'T
-
             [<AbstractClass>]
             type SeqEnumerable<'T> =
-                abstract member ForEach<'a when 'a :> SeqConsumer<'T,'T>> : f:(ISeqPipeline->'a) -> 'a
+                abstract member ForEach<'a when 'a :> SeqConsumer<'T,'T>> : g: ('T -> 'T -> 'T) -> state: ref<'T> -> unit
 
         /// <summary>Returns a new sequence that contains the cartesian product of the two input sequences.</summary>
         /// <param name="source1">The first sequence.</param>

@@ -465,20 +465,9 @@ namespace Microsoft.FSharp.Collections
                     member __.OnComplete() = ()
                     member __.OnDispose() = ()
 
-            type Fold<'T> (folder:'T->'T->'T, initialState:'T) =
-                inherit SeqConsumer<'T,'T>()
-
-                let folder = OptimizedClosures.FSharpFunc<_,_,_>.Adapt(folder)
-
-                let mutable folded = initialState
-                override __.ProcessNext input =
-                    folded <- folder.Invoke (folded, input)
-                    true
-                member __.Folded = folded
-
             [<AbstractClass>]
             type SeqEnumerable<'T>() =
-                abstract member ForEach<'a when 'a :> SeqConsumer<'T,'T>> : f:(ISeqPipeline->'a) -> 'a
+                abstract member ForEach<'a when 'a :> SeqConsumer<'T,'T>> : g: ('T -> 'T -> 'T) -> state: ref<'T> -> unit
 
             module Helpers =
                 // used for performance reasons; these are not recursive calls, so should be safe
@@ -966,7 +955,6 @@ namespace Microsoft.FSharp.Collections
 
                     abstract member Compose<'U>  : (SeqComponentFactory<'T,'U>) -> IEnumerable<'U>
                     abstract member Append<'T>   : (seq<'T>) -> IEnumerable<'T>
-                    abstract member Fold<'State> : folder:('State->'T->'State) -> state:'State -> 'State
                     abstract member Iter         : f:('T->unit) -> unit
 
                     default this.Append source = Helpers.upcastEnumerable (AppendEnumerable [this; source])
@@ -1018,7 +1006,7 @@ namespace Microsoft.FSharp.Collections
                     override __.Compose (next:SeqComponentFactory<'U,'V>) : IEnumerable<'V> =
                         Helpers.upcastEnumerable (new Enumerable<'T,'V>(enumerable, ComposedFactory.Combine current next))
 
-                    override this.ForEach (f:ISeqPipeline->#SeqConsumer<'U,'U>) = ignore f; failwith "TBD"
+                    override this.ForEach g state = ignore (g !state); failwith "TBD"
 
                     override this.Iter (f:'U->unit) : unit =
                         let enumerator = enumerable.GetEnumerator ()
@@ -1031,24 +1019,6 @@ namespace Microsoft.FSharp.Collections
                                 f result.Current
 
                         (Helpers.upcastISeqComponent components).OnComplete ()
-
-
-                    override this.Fold<'State> (folder:'State->'U->'State) (initialState:'State) : 'State =
-                        let folder' = OptimizedClosures.FSharpFunc<_,_,_>.Adapt folder
-                        
-                        let enumerator = enumerable.GetEnumerator ()
-                        let result = Result<'U> ()
-    
-                        let components = current.Create result (SetResult<'U> result)
-    
-                        let mutable state = initialState
-                        while (not result.Halted) && (enumerator.MoveNext ()) do
-                            if components.ProcessNext (enumerator.Current) then
-                                state <- folder'.Invoke (state, result.Current)
-
-                        (Helpers.upcastISeqComponent components).OnComplete ()
-    
-                        state
 
                 and AppendEnumerator<'T> (sources:list<seq<'T>>) =
                     let sources = sources |> List.rev 
@@ -1102,7 +1072,7 @@ namespace Microsoft.FSharp.Collections
                     override this.Append source =
                         Helpers.upcastEnumerable (AppendEnumerable (source :: sources))
 
-                    override this.ForEach (f:ISeqPipeline->#SeqConsumer<'T,'T>) = ignore f; failwith "TBD"
+                    override this.ForEach g state = ignore (g !state); failwith "TBD"
 
                     override this.Iter (f:'T->unit) : unit =
                         let enumerable = Helpers.upcastEnumerable (AppendEnumerable sources)
@@ -1111,17 +1081,6 @@ namespace Microsoft.FSharp.Collections
                         while enumerator.MoveNext () do
                             f enumerator.Current
 
-                    override this.Fold<'State> (folder:'State->'T->'State) (initialState:'State) : 'State =
-                        let folder' = OptimizedClosures.FSharpFunc<_,_,_>.Adapt folder
-                        
-                        let enumerable = Helpers.upcastEnumerable (AppendEnumerable sources)
-                        let enumerator = enumerable.GetEnumerator ()
-    
-                        let mutable state = initialState
-                        while enumerator.MoveNext () do
-                            state <- folder'.Invoke (state, enumerator.Current)
-    
-                        state
 
                 let create enumerable current =
                     Helpers.upcastEnumerable (Enumerable(enumerable, current))
@@ -1169,15 +1128,22 @@ namespace Microsoft.FSharp.Collections
                     override __.Compose (next:SeqComponentFactory<'U,'V>) : IEnumerable<'V> =
                         Helpers.upcastEnumerable (new Enumerable<'T,'V>(delayedArray, ComposedFactory.Combine current next))
 
-                    override this.ForEach (f:ISeqPipeline->#SeqConsumer<'U,'U>) =
+                    override this.ForEach g (total: ref<'U>) =
                         let mutable idx = 0
                         let mutable halted = false
+
+                        let f = OptimizedClosures.FSharpFunc<_,_,_>.Adapt g
+
+                        let temp = 
+                            { new SeqConsumer<'U,'U> () with
+                                override this.ProcessNext value =
+                                    total := f.Invoke(!total, value)
+                                    true }
 
                         let pipeline =
                             { new ISeqPipeline with member x.StopFurtherProcessing() = halted <- true }
 
-                        let result = f pipeline
-                        let consumer = current.Create pipeline result
+                        let consumer = current.Create pipeline temp
     
                         let array = delayedArray ()
                         while (not halted) && (idx < array.Length) do
@@ -1185,8 +1151,6 @@ namespace Microsoft.FSharp.Collections
                             idx <- idx + 1
 
                         (Helpers.upcastISeqComponent consumer).OnComplete ()
-
-                        result
 
                     override this.Iter (f:'U->unit) : unit =
                         let mutable idx = 0
@@ -1201,24 +1165,6 @@ namespace Microsoft.FSharp.Collections
 
                         (Helpers.upcastISeqComponent components).OnComplete ()
 
-
-                    override this.Fold<'State> (folder:'State->'U->'State) (initialState:'State) : 'State =
-                        let folder' = OptimizedClosures.FSharpFunc<_,_,_>.Adapt folder
-                        
-                        let mutable idx = 0
-                        let result = Result<'U> ()
-                        let components = current.Create result (SetResult<'U> result)
-    
-                        let array = delayedArray ()
-                        let mutable state = initialState
-                        while (not result.Halted) && (idx < array.Length) do
-                            if components.ProcessNext array.[idx] then
-                                state <- folder'.Invoke (state, result.Current)
-                            idx <- idx + 1
-    
-                        (Helpers.upcastISeqComponent components).OnComplete ()
-
-                        state
 
                 let createDelayed (delayedArray:unit->array<'T>) (current:SeqComponentFactory<'T,'U>) =
                     Helpers.upcastEnumerable (Enumerable(delayedArray, current))
@@ -1267,7 +1213,7 @@ namespace Microsoft.FSharp.Collections
                     override __.Compose (next:SeqComponentFactory<'U,'V>) : IEnumerable<'V> =
                         Helpers.upcastEnumerable (new Enumerable<'T,'V>(alist, ComposedFactory.Combine current next))
 
-                    override this.ForEach (f:ISeqPipeline->#SeqConsumer<'U,'U>) = ignore f; failwith "TBD"
+                    override this.ForEach g state = ignore (g !state); failwith "TBD"
 
                     override this.Iter (f:'U->unit) : unit =
                         let result = Result<'U> ()
@@ -1285,26 +1231,6 @@ namespace Microsoft.FSharp.Collections
                                     fold tl
     
                         fold alist
-
-                    override this.Fold<'State> (folder:'State->'U->'State) (initialState:'State) : 'State =
-                        let folder' = OptimizedClosures.FSharpFunc<_,_,_>.Adapt folder
-                        
-                        let result = Result<'U> ()
-                        let components = current.Create result (SetResult<'U> result)
-    
-                        let rec fold state lst =
-                            match result.Halted, lst with
-                            | true, _
-                            | false, [] ->
-                                (Helpers.upcastISeqComponent components).OnComplete ()
-                                state
-                            | false, hd :: tl ->
-                                if components.ProcessNext hd then
-                                    fold (folder'.Invoke (state, result.Current)) tl
-                                else
-                                    fold state tl
-    
-                        fold initialState alist
 
                 let create alist current =
                     Helpers.upcastEnumerable (Enumerable(alist, current))
@@ -1341,7 +1267,7 @@ namespace Microsoft.FSharp.Collections
                     override this.Compose (next:SeqComponentFactory<'U,'V>) : IEnumerable<'V> =
                         Helpers.upcastEnumerable (new Enumerable<'T,'V,'GeneratorState>(generator, state, ComposedFactory.Combine current next))
 
-                    override this.ForEach (f:ISeqPipeline->#SeqConsumer<'U,'U>) = ignore f; failwith "TBD"
+                    override this.ForEach g state = ignore (g !state); failwith "TBD"
 
                     override this.Iter (f:'U->unit) : unit =
                         let result = Result<'U> ()
@@ -1359,26 +1285,6 @@ namespace Microsoft.FSharp.Collections
                                     fold next
     
                         fold state
-
-                    override this.Fold<'State> (folder:'State->'U->'State) (initialState:'State) : 'State =
-                        let folder' = OptimizedClosures.FSharpFunc<_,_,_>.Adapt folder
-                        
-                        let result = Result<'U> ()
-                        let components = current.Create result (SetResult<'U> result)
-
-                        let rec fold state current =
-                            match result.Halted, generator current with
-                            | true, _
-                            | false, None ->
-                                (Helpers.upcastISeqComponent components).OnComplete ()
-                                state
-                            | false, Some (item, next) ->
-                                if components.ProcessNext item then
-                                    fold (folder'.Invoke (state, result.Current)) next
-                                else
-                                    fold state next
-    
-                        fold initialState state
 
             module Init =
                 // The original implementation of "init" delayed the calculation of Current, and so it was possible
@@ -1455,7 +1361,7 @@ namespace Microsoft.FSharp.Collections
                     override this.Compose (next:SeqComponentFactory<'U,'V>) : IEnumerable<'V> =
                         Helpers.upcastEnumerable (new Enumerable<'T,'V>(count, f, ComposedFactory.Combine current next))
 
-                    override this.ForEach (f:ISeqPipeline->#SeqConsumer<'U,'U>) = ignore f; failwith "TBD"
+                    override this.ForEach g state = ignore (g !state); failwith "TBD"
 
                     override this.Iter (iter:'U->unit) : unit =
                         let result = Result<'U> ()
@@ -1480,33 +1386,6 @@ namespace Microsoft.FSharp.Collections
 
                         (Helpers.upcastISeqComponent components).OnComplete ()
 
-                    override this.Fold<'State> (folder:'State->'U->'State) (initialState:'State) : 'State =
-                        let folder' = OptimizedClosures.FSharpFunc<_,_,_>.Adapt folder
-                        
-                        let result = Result<'U> ()
-                        let components = current.Create result (SetResult<'U> result)
-    
-                        let mutable idx = -1
-                        let terminatingIdx = getTerminatingIdx count
-                        
-                        let isSkipping =
-                            makeIsSkipping components
-
-                        let mutable maybeSkipping = true
-
-                        let mutable state = initialState
-                        while (not result.Halted) && (idx < terminatingIdx) do
-                            if maybeSkipping then
-                                maybeSkipping <- isSkipping ()
-
-                            if (not maybeSkipping) && (components.ProcessNext (f (idx+1))) then
-                                state <- folder'.Invoke (state, result.Current)
-
-                            idx <- idx + 1
-
-                        (Helpers.upcastISeqComponent components).OnComplete ()
-    
-                        state
 
                 let upto lastOption f =
                     match lastOption with
@@ -1571,24 +1450,13 @@ namespace Microsoft.FSharp.Collections
                     override this.Compose (next:SeqComponentFactory<'T,'U>) : IEnumerable<'U> =
                         Helpers.upcastEnumerable (Enumerable<'T,'V>(count, f, next))
 
-                    override this.ForEach (f:ISeqPipeline->#SeqConsumer<'T,'T>) = ignore f; failwith "TBD"
+                    override this.ForEach g state = ignore (g !state); failwith "TBD"
 
                     override this.Iter (f:'T->unit): unit =
                         let enumerator = (Helpers.upcastEnumerable this).GetEnumerator ()
     
                         while enumerator.MoveNext () do
                             f enumerator.Current
-
-                    override this.Fold<'State> (folder:'State->'T->'State) (initialState:'State) : 'State =
-                        let folder' = OptimizedClosures.FSharpFunc<_,_,_>.Adapt folder
-                        
-                        let enumerator = (Helpers.upcastEnumerable this).GetEnumerator ()
-    
-                        let mutable state = initialState
-                        while enumerator.MoveNext () do
-                            state <- folder'.Invoke (state, enumerator.Current)
-    
-                        state
 
 #if FX_NO_ICLONEABLE
         open Microsoft.FSharp.Core.ICloneableExtensions
@@ -1852,7 +1720,11 @@ namespace Microsoft.FSharp.Collections
         let fold<'T,'State> f (x:'State) (source:seq<'T>) =
             checkNonNull "source" source
             match source with
-            | :? SeqComposer.Enumerable.EnumerableBase<'T> as s -> s.Fold f x
+            //| :? SeqComposer.Enumerable.EnumerableBase<'T> as s -> 
+                //let state = ref x
+                //let f = OptimizedClosures.FSharpFunc<_,_,_>.Adapt(f)
+                //s.ForEach f state
+                //!state
             | _ ->
                 use e = source.GetEnumerator()
                 let f = OptimizedClosures.FSharpFunc<_,_,_>.Adapt(f)
@@ -2290,9 +2162,9 @@ namespace Microsoft.FSharp.Collections
         let inline sum (source:seq<'a>) : 'a =
             match source with
             | :? SeqComposer.SeqEnumerable<'a> as s ->
-                let summer = SeqComposer.Fold (Checked.(+), LanguagePrimitives.GenericZero)
-                s.ForEach (fun _ -> summer) |> ignore
-                summer.Folded
+                let total = ref LanguagePrimitives.GenericZero
+                s.ForEach Checked.(+) total
+                !total
             | _ -> 
                 use e = source.GetEnumerator()
                 let mutable acc = LanguagePrimitives.GenericZero< ^a>
