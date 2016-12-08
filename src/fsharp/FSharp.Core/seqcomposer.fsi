@@ -10,7 +10,7 @@ namespace Microsoft.FSharp.Collections
 
   [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
   module Composer =
-    module Core = 
+    module Core =
         /// <summary>PipeIdx denotes the index of the element within the pipeline. 0 denotes the
         /// source of the chain.</summary>
         type PipeIdx = int
@@ -20,7 +20,7 @@ namespace Microsoft.FSharp.Collections
         /// provides it's own OnComplete and OnDispose function which should be used to handle
         /// a particular consumers cleanup.</summary>
         type ICompletionChaining =
-            /// <summary>OnComplete is used to determine if the object has been processed correctly, 
+            /// <summary>OnComplete is used to determine if the object has been processed correctly,
             /// and possibly throw exceptions to denote incorrect application (i.e. such as a Take
             /// operation which didn't have a source at least as large as was required). It is
             /// not called in the case of an exception being thrown whilst the stream is still
@@ -74,6 +74,7 @@ namespace Microsoft.FSharp.Collections
         type SeqFactory<'T,'U> =
             new : unit -> SeqFactory<'T,'U>
             abstract PipeIdx : PipeIdx
+            default  PipeIdx : PipeIdx
             abstract member Create : IOutOfBand -> PipeIdx -> Consumer<'U,'V> -> Consumer<'T,'V>
 
         type ISeq<'T> =
@@ -82,6 +83,18 @@ namespace Microsoft.FSharp.Collections
             abstract member ForEach : f:((unit -> unit) -> 'a) -> 'a when 'a :> Consumer<'T,'T>
 
     open Core
+
+    module internal TailCall =
+        val inline avoid : boolean:bool -> bool
+
+    module internal Upcast =
+        // The f# compiler outputs unnecessary unbox.any calls in upcasts. If this functionality
+        // is fixed with the compiler then these functions can be removed.
+        val inline seq : t:#ISeq<'T> -> ISeq<'T>
+        val inline enumerable : t:#IEnumerable<'T> -> IEnumerable<'T>
+        val inline enumerator : t:#IEnumerator<'T> -> IEnumerator<'T>
+        val inline enumeratorNonGeneric : t:#IEnumerator -> IEnumerator
+        val inline iCompletionChaining  : t:#ICompletionChaining -> ICompletionChaining
 
     module internal Seq =
         type ComposedFactory<'T,'U,'V> =
@@ -95,16 +108,6 @@ namespace Microsoft.FSharp.Collections
               Combine : first: SeqFactory<'T,'U> ->
                           second: SeqFactory<'U,'V> ->
                              SeqFactory<'T,'V>
-          end
-        and ChooseFactory<'T,'U> =
-          class
-            inherit  SeqFactory<'T,'U>
-            new : filter:('T -> 'U option) ->  ChooseFactory<'T,'U>
-          end
-        and DistinctFactory<'T when 'T : equality> =
-          class
-            inherit  SeqFactory<'T,'T>
-            new : unit ->  DistinctFactory<'T>
           end
         and DistinctByFactory<'T,'Key when 'Key : equality> =
           class
@@ -222,20 +225,6 @@ namespace Microsoft.FSharp.Collections
             interface ICompletionChaining
             new : next:ICompletionChaining ->
                     SeqComponent<'T,'U>
-          end
-
-        and Choose<'T,'U,'V> =
-          class
-            inherit  SeqComponent<'T,'V>
-            new : choose:('T -> 'U option) * next: Consumer<'U,'V> ->
-                     Choose<'T,'U,'V>
-            override ProcessNext : input:'T -> bool
-          end
-        and Distinct<'T,'V when 'T : equality> =
-          class
-            inherit  SeqComponent<'T,'V>
-            new : next: Consumer<'T,'V> ->  Distinct<'T,'V>
-            override ProcessNext : input:'T -> bool
           end
         and DistinctBy<'T,'Key,'V when 'Key : equality> =
           class
@@ -647,20 +636,23 @@ namespace Microsoft.FSharp.Collections
           element:'T -> source: ISeq<'T> -> bool when 'T : equality
         [<CompiledNameAttribute ("ForAll")>]
         val forall : f:('T -> bool) -> source: ISeq<'T> -> bool
-        
+
         [<CompiledName "Filter">]
         val inline filter : f:('T -> bool) -> source: ISeq<'T> ->  ISeq<'T>
 
         [<CompiledName "Map">]
         val inline map : f:('T -> 'U) -> source: ISeq<'T> ->  ISeq<'U>
-          
+
         [<CompiledNameAttribute ("MapIndexed")>]
         val inline mapi : f:(int->'a->'b) -> source: ISeq<'a> -> ISeq<'b>
 
         val mapi_adapt : f:OptimizedClosures.FSharpFunc<int,'a,'b> -> source: ISeq<'a> -> ISeq<'b>
 
         [<CompiledNameAttribute ("Choose")>]
-        val choose : f:('a->option<'b>) -> source: ISeq<'a> -> ISeq<'b>
+        val inline choose : f:('a->option<'b>) -> source: ISeq<'a> -> ISeq<'b>
+
+        [<CompiledNameAttribute "Distinct">]
+        val inline distinct : source: ISeq<'a> -> ISeq<'a>
 
         [<CompiledNameAttribute ("Indexed")>]
         val inline indexed : source: ISeq<'a> -> ISeq<int * 'a>
