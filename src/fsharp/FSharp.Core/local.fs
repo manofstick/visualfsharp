@@ -952,6 +952,7 @@ module internal Array =
 
     open System
     open System.Collections.Generic
+    open Microsoft.FSharp.Collections.SeqComposition
 
 #if FX_NO_ARRAY_KEY_SORT
     // Mimic behavior of BCL QSort routine, used under the hood by various array sorting APIs
@@ -1220,6 +1221,21 @@ module internal Array =
                 startIndex := !startIndex + minChunkSize
             res
 
+    type FoldToArray<'T> () =
+        inherit Folder<'T, array<'T>>(Unchecked.defaultof<_>)
+
+        let mutable tmp = ResizeArray ()
+
+        override this.ProcessNext input =
+            tmp.Add input
+            true (* result unused in fold *)
+
+        override this.ChainComplete _ =
+            this.Result <- tmp.ToArray ()
+
+    let ofISeq (s : ISeq<'T>) =
+        s.Fold (fun _ -> upcast FoldToArray())
+
     let ofSeq (source : seq<'T>)  =
         match source with
         | :? ('T[]) as res -> (res.Clone() :?> 'T[])
@@ -1230,6 +1246,7 @@ module internal Array =
             let arr = zeroCreateUnchecked res.Count
             res.CopyTo(arr, 0)
             arr
+        | :? ISeq<'T> as s -> ofISeq s
         | _ ->
             let res = ResizeArray source
             res.ToArray()
