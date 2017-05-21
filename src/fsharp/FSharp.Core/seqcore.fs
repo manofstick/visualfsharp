@@ -1157,6 +1157,100 @@ namespace Microsoft.FSharp.Core.CompilerServices
                      { new System.IDisposable with
                           member x.Dispose() = remove h } }
 
+    [<AbstractClass>]
+    type ThinGeneratedSequenceBase<'T>() =
+        inherit EnumerableBase<'T>()
+
+        member internal x.GetCurrent () = x.LastGenerated
+
+        abstract GetFreshEnumerator : unit -> IEnumerator<'T>
+        abstract GenerateNext : next:byref<IEnumerable<'T>> -> int // 0 = Stop, 1 = Yield, 2 = Goto
+        abstract Close: unit -> unit
+        abstract CheckClose: bool
+        abstract LastGenerated : 'T
+
+        //[<System.Diagnostics.DebuggerNonUserCode; System.Diagnostics.DebuggerStepThroughAttribute>]
+        member this.MoveNextImpl() =
+             let mutable target = null
+             match this.GenerateNext(&target) with
+             | 0 -> false
+             | 1 -> true
+             | 2 -> failwith "unexpected"
+             | _ (* 0 *) -> false
+
+        interface IEnumerable<'T> with
+            member x.GetEnumerator() = x.GetFreshEnumerator()
+        interface IEnumerable with
+            member x.GetEnumerator() = (x.GetFreshEnumerator() :> IEnumerator)
+        interface IEnumerator<'T> with
+            member x.Current = x.GetCurrent ()
+            member x.Dispose() = x.Close()
+        interface IEnumerator with
+            member x.Current = box (x.LastGenerated)
+
+            //[<System.Diagnostics.DebuggerNonUserCode; System.Diagnostics.DebuggerStepThroughAttribute>]
+            member x.MoveNext() = x.MoveNextImpl()
+
+            member x.Reset() = raise <| new System.NotSupportedException()
+
+        interface ISeq<'T> with
+            member this.PushTransform<'U> (next:ITransformFactory<'T,'U>) : ISeq<'U> =
+                upcast (new ThinGeneratedSequenceBaseEnumerable<'T,'U>(this, next, 1))
+
+            member this.Fold<'Result> (createFolder:PipeIdx->Folder<'T,'Result>) =
+                let result = createFolder 1
+                try
+                    use maybeGeneratedSequenceBase = this.GetFreshEnumerator ()
+                    match maybeGeneratedSequenceBase with
+                    | :? ThinGeneratedSequenceBase<'T> as e -> // avoids two virtual function calls
+                        while result.HaltedIdx = 0 && e.MoveNextImpl () do
+                            result.ProcessNext (e.GetCurrent ()) |> ignore 
+                    | e ->
+                        while result.HaltedIdx = 0 && e.MoveNext () do
+                            result.ProcessNext e.Current |> ignore
+
+                    result.ChainComplete result.HaltedIdx
+                finally
+                    result.ChainDispose ()
+                result.Result
+
+        override this.Length () =
+            use maybeGeneratedSequenceBase = this.GetFreshEnumerator ()
+            let mutable count = 0
+            match maybeGeneratedSequenceBase with
+            | :? ThinGeneratedSequenceBase<'T> as e ->
+                while e.MoveNextImpl () do
+                    count <- count + 1
+            | e ->
+                while e.MoveNext () do
+                    count <- count + 1
+            count
+    and ThinGeneratedSequenceBaseEnumerable<'T,'U>(generatedSequence:ThinGeneratedSequenceBase<'T>, transformFactory:ITransformFactory<'T,'U>, pipeIdx:PipeIdx) =
+        inherit SeqFactoryBase<'T,'U>(transformFactory, pipeIdx)
+
+        interface IEnumerable<'U> with
+            member this.GetEnumerator () = VanillaEnumerator<'T,'U>.Construct (generatedSequence.GetFreshEnumerator()) this
+
+        interface ISeq<'U> with
+            member this.PushTransform (next:ITransformFactory<'U,'V>) : ISeq<'V> =
+                upcast (new ThinGeneratedSequenceBaseEnumerable<'T,'V>(generatedSequence, this.Compose next, this.PipeIdx+1))
+
+            member this.Fold<'Result> (createFolder:PipeIdx->Folder<'U,'Result>) =
+                let result, consumer = this.CreatePipeline createFolder
+                try
+                    use maybeGeneratedSequenceBase = generatedSequence.GetFreshEnumerator ()
+                    match maybeGeneratedSequenceBase with
+                    | :? ThinGeneratedSequenceBase<'T> as e ->
+                        while result.HaltedIdx = 0 && e.MoveNextImpl () do
+                            consumer.ProcessNext (e.GetCurrent ()) |> ignore
+                    | e ->
+                        while result.HaltedIdx = 0 && e.MoveNext () do
+                            consumer.ProcessNext e.Current |> ignore
+
+                    consumer.ChainComplete result.HaltedIdx
+                finally
+                    consumer.ChainDispose ()
+                result.Result
 
     [<AbstractClass>]
     type GeneratedSequenceBase<'T>() =

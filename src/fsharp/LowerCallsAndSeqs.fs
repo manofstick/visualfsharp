@@ -93,7 +93,8 @@ type LoweredSeqFirstPhaseResult =
      labels : int list      
      /// any actual work done in Close
      significantClose : bool
-     
+     /// if the enumerable requires enumerable equivalent of tail call optimization
+     appliesTailCallOptimization : bool
      /// The state variables allocated for one portion of the sequence expression (i.e. the local let-bound variables which become state variables)
      stateVars: ValRef list }
 
@@ -214,6 +215,7 @@ let LowerSeqExpr g amap overallExpr =
                         generate,dispose,checkDispose)
                    labels=[label]
                    stateVars=[]
+                   appliesTailCallOptimization = false
                    significantClose = false
                   }
 
@@ -235,7 +237,8 @@ let LowerSeqExpr g amap overallExpr =
                             let checkDispose = mkCompGenSequential m checkDispose2 checkDispose1
                             generate,dispose,checkDispose)
                        labels= res1.labels @ res2.labels
-                       stateVars = res1.stateVars @ res2.stateVars 
+                       stateVars = res1.stateVars @ res2.stateVars
+                       appliesTailCallOptimization = res2.appliesTailCallOptimization
                        significantClose = res1.significantClose || res2.significantClose }
             | _ -> 
                 None
@@ -250,7 +253,8 @@ let LowerSeqExpr g amap overallExpr =
                             let checkDispose = checkDispose2
                             generate,dispose,checkDispose)
                        labels = res2.labels
-                       stateVars = res2.stateVars 
+                       stateVars = res2.stateVars
+                       appliesTailCallOptimization = res2.appliesTailCallOptimization
                        significantClose = res2.significantClose }
             | _ -> 
                 None
@@ -314,7 +318,8 @@ let LowerSeqExpr g amap overallExpr =
 
                             generate,dispose,checkDispose)
                        labels = innerDisposeContinuationLabel :: res1.labels
-                       stateVars = res1.stateVars 
+                       stateVars = res1.stateVars
+                       appliesTailCallOptimization = res1.appliesTailCallOptimization
                        significantClose = true }
             | _ -> 
                 None
@@ -326,7 +331,8 @@ let LowerSeqExpr g amap overallExpr =
                             let checkDispose = Expr.Op(TOp.Goto currentDisposeContinuationLabel,[],[],m)
                             generate,dispose,checkDispose)
                    labels = []
-                   stateVars = [] 
+                   stateVars = []
+                   appliesTailCallOptimization = false
                    significantClose = false }
         | Expr.Sequential(x1,x2,NormalSeq,ty,m) -> 
             match Lower false isTailCall noDisposeContinuationLabel currentDisposeContinuationLabel x2 with 
@@ -391,6 +397,7 @@ let LowerSeqExpr g amap overallExpr =
                 let labs = tgl |> List.collect (fun res -> res.labels)
                 let stateVars = tgl |> List.collect (fun res -> res.stateVars)
                 let significantClose = tgl |> List.exists (fun res -> res.significantClose)
+                let appliesTailCallOptimization = tgl |> List.exists (fun res -> res.appliesTailCallOptimization)
                 Some { phase2 = (fun ctxt -> 
                             let gtgs,disposals,checkDisposes = 
                                 (Array.toList targets,tgl) 
@@ -405,6 +412,7 @@ let LowerSeqExpr g amap overallExpr =
                             generate,dispose,checkDispose)
                        labels=labs
                        stateVars = stateVars 
+                       appliesTailCallOptimization = appliesTailCallOptimization
                        significantClose = significantClose }
             else
                 None
@@ -464,6 +472,7 @@ let LowerSeqExpr g amap overallExpr =
                                     generate,dispose,checkDispose)
                                labels=[label]
                                stateVars=[] 
+                               appliesTailCallOptimization = true
                                significantClose = false }
                     else
                         let v,ve = mkCompGenLocal m "v" inpElemTy
@@ -606,7 +615,7 @@ let LowerSeqExpr g amap overallExpr =
             
             let checkDisposeExprWithJumpTable = addJumpTable true checkDisposeExpr  
             // all done, no return the results
-            Some (nextvref, pcvref,currvref,stateVars,stateMachineExprWithJumpTable,disposalExpr,checkDisposeExprWithJumpTable,ty,m)
+            Some (res.appliesTailCallOptimization, (nextvref, pcvref,currvref,stateVars,stateMachineExprWithJumpTable,disposalExpr,checkDisposeExprWithJumpTable,ty,m))
 
         | None -> 
             // printfn "FAILED: no compilation found! %s" (stringOfRange m)

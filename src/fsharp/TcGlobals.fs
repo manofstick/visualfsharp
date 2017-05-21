@@ -829,6 +829,7 @@ type public TcGlobals(compilingFslib: bool, ilg:ILGlobals, fslibCcu: CcuThunk, d
   member __.fslib_IDelegateEvent_tcr      = v_fslib_IDelegateEvent_tcr
   member __.seq_tcr        = v_seq_tcr
   member val seq_base_tcr = mk_MFCompilerServices_tcref fslibCcu "GeneratedSequenceBase`1"
+  member val seq_thin_base_tcr = mk_MFCompilerServices_tcref fslibCcu "ThinGeneratedSequenceBase`1"
   member val measureproduct_tcr = mk_MFCompilerServices_tcref fslibCcu "MeasureProduct`2"
   member val measureinverse_tcr = mk_MFCompilerServices_tcref fslibCcu "MeasureInverse`1"
   member val measureone_tcr = mk_MFCompilerServices_tcref fslibCcu "MeasureOne"

@@ -1768,8 +1768,8 @@ let rec GenExpr (cenv:cenv) (cgbuf:CodeGenBuffer) eenv sp expr sequel =
       CG.EmitSeqPoint cgbuf (RangeOfEventualEmittedSequencePoint cenv.g expr)
 
   match (if compileSequenceExpressions then LowerCallsAndSeqs.LowerSeqExpr cenv.g cenv.amap expr else None) with
-  | Some info ->
-      GenSequenceExpr cenv cgbuf eenv info sequel
+  | Some (true,  info) -> GenSequenceExpr     cenv cgbuf eenv info sequel
+  | Some (false, info) -> GenSequenceThinExpr cenv cgbuf eenv info sequel
   | None ->
 
   match expr with 
@@ -3664,6 +3664,95 @@ and GenSequenceExpr cenv (cgbuf:CodeGenBuffer) eenvouter (nextEnumeratorValRef:V
     CG.EmitInstr cgbuf (pop ilCloFreeVars.Length) (Push [ilCloRetTyOuter]) (I_newobj (ilxCloSpec.Constructor,None))
     GenSequel cenv eenvouter.cloc cgbuf sequel
 
+and GenSequenceThinExpr cenv (cgbuf:CodeGenBuffer) eenvouter (nextEnumeratorValRef:ValRef,pcvref:ValRef,currvref:ValRef,stateVars,generateNextExpr,closeExpr,checkCloseExpr:Expr,seqElemTy, m)  sequel =
+    let stateVars = [ pcvref; currvref ] @ stateVars
+    let stateVarsSet = stateVars |> List.map (fun vref -> vref.Deref) |> Zset.ofList valOrder 
+
+    // pretend that the state variables are bound
+    let eenvouter = 
+        eenvouter |> AddStorageForLocalVals cenv.g (stateVars |> List.map (fun v -> v.Deref,Local(0,None)))
+    
+    // Get the free variables. Make a lambda to pretend that the 'nextEnumeratorValRef' is bound (it is an argument to GenerateNext)
+    let (cloAttribs,_,_,cloFreeTyvars,cloFreeVars,ilCloTypeRef:ILTypeRef,ilCloFreeVars,eenvinner) = 
+         GetIlxClosureFreeVars cenv m None eenvouter [] (mkLambda m nextEnumeratorValRef.Deref (generateNextExpr, cenv.g.int32_ty))
+
+    let ilCloSeqElemTy = GenType cenv.amap m eenvinner.tyenv seqElemTy
+    let cloRetTy = mkSeqTy cenv.g seqElemTy
+    let ilCloRetTyInner = GenType cenv.amap m eenvinner.tyenv cloRetTy
+    let ilCloRetTyOuter = GenType cenv.amap m eenvouter.tyenv cloRetTy
+    let ilCloEnumeratorTy = GenType cenv.amap m eenvinner.tyenv (mkIEnumeratorTy cenv.g seqElemTy)
+    let ilCloEnumerableTy = GenType cenv.amap m eenvinner.tyenv (mkSeqTy cenv.g seqElemTy)
+    let ilCloBaseTy = GenType cenv.amap m eenvinner.tyenv (mkAppTy cenv.g.seq_thin_base_tcr [seqElemTy])  
+    let ilCloGenericParams = GenGenericParams cenv eenvinner cloFreeTyvars
+
+    // Create a new closure class with a single "MoveNext" method that implements the iterator. 
+    let ilCloTyInner = mkILFormalBoxedTy ilCloTypeRef ilCloGenericParams
+    let ilCloLambdas = Lambdas_return ilCloRetTyInner 
+    let cloref = IlxClosureRef(ilCloTypeRef, ilCloLambdas, ilCloFreeVars)
+    let ilxCloSpec = IlxClosureSpec.Create(cloref, GenGenericArgs m eenvouter.tyenv cloFreeTyvars)
+    let formalClospec = IlxClosureSpec.Create(cloref, mkILFormalGenericArgs 0 ilCloGenericParams)
+
+    let getFreshMethod = 
+        let _,mbody =
+            CodeGenMethod cenv cgbuf.mgbuf (true,[],"GetFreshEnumerator",eenvinner,1,0,
+                                            (fun cgbuf eenv -> 
+                                                for fv in cloFreeVars do 
+(*  TODO: Emit CompareExchange 
+                                                        if (System.Threading.Interlocked.CompareExchange(&__state, 1, 0) = 0) then
+                                                            (x :> IEnumerator<'T>)
+                                                        else
+                                                            ...
+*)
+                                                   /// State variables always get zero-initialized
+                                                   if stateVarsSet.Contains fv then 
+                                                       GenDefaultValue cenv cgbuf eenv (fv.Type,m) 
+                                                   else
+                                                       GenGetLocalVal cenv cgbuf eenv m fv None
+                                                CG.EmitInstr cgbuf (pop ilCloFreeVars.Length) (Push [ilCloRetTyInner]) (I_newobj (formalClospec.Constructor,None))
+                                                GenSequel cenv eenv.cloc cgbuf Return),
+                                            m)
+        mkILNonGenericVirtualMethod("GetFreshEnumerator",ILMemberAccess.Public, [], mkILReturn ilCloEnumeratorTy, MethodBody.IL mbody)
+        |> AddNonUserCompilerGeneratedAttribs cenv.g
+
+    let closeMethod = 
+        // Note: We suppress the first sequence point in the body of this method since it is the initial state machine jump
+        let spReq = SPSuppress
+        mkILNonGenericVirtualMethod("Close",ILMemberAccess.Public, [], mkILReturn ILType.Void, MethodBody.IL (CodeGenMethodForExpr cenv cgbuf.mgbuf (spReq,[],"Close",eenvinner,1,0,closeExpr,discardAndReturnVoid)))
+
+    let checkCloseMethod = 
+        // Note: We suppress the first sequence point in the body of this method since it is the initial state machine jump
+        let spReq = SPSuppress
+        mkILNonGenericVirtualMethod("get_CheckClose",ILMemberAccess.Public, [], mkILReturn cenv.g.ilg.typ_Bool, MethodBody.IL (CodeGenMethodForExpr cenv cgbuf.mgbuf (spReq,[],"get_CheckClose",eenvinner,1,0,checkCloseExpr,Return)))
+
+    let generateNextMethod = 
+        // Note: We suppress the first sequence point in the body of this method since it is the initial state machine jump
+        let spReq = SPSuppress
+        // the 'next enumerator' byref arg is at arg position 1 
+        let eenvinner = eenvinner |> AddStorageForLocalVals cenv.g [ (nextEnumeratorValRef.Deref, Arg 1) ]
+        mkILNonGenericVirtualMethod("GenerateNext",ILMemberAccess.Public, [mkILParamNamed("next",ILType.Byref ilCloEnumerableTy)], mkILReturn cenv.g.ilg.typ_Int32, MethodBody.IL (CodeGenMethodForExpr cenv cgbuf.mgbuf (spReq,[],"GenerateNext",eenvinner,2,0,generateNextExpr,Return)))
+
+    let lastGeneratedMethod = 
+        mkILNonGenericVirtualMethod("get_LastGenerated",ILMemberAccess.Public, [], mkILReturn ilCloSeqElemTy, MethodBody.IL (CodeGenMethodForExpr cenv cgbuf.mgbuf (SPSuppress,[],"get_LastGenerated",eenvinner,1,0,exprForValRef m currvref,Return)))
+        |> AddNonUserCompilerGeneratedAttribs cenv.g
+
+    let ilCtorBody = 
+        mkILSimpleStorageCtor(None, Some ilCloBaseTy.TypeSpec, ilCloTyInner, [], [], ILMemberAccess.Assembly).MethodBody
+
+    let attrs = GenAttrs cenv eenvinner cloAttribs
+    let cloTypeDefs = GenClosureTypeDefs cenv (ilCloTypeRef,ilCloGenericParams,attrs,ilCloFreeVars,ilCloLambdas,ilCtorBody,[generateNextMethod;closeMethod;checkCloseMethod;lastGeneratedMethod;getFreshMethod],[],ilCloBaseTy,[])
+    for cloTypeDef in cloTypeDefs do 
+        cgbuf.mgbuf.AddTypeDef(ilCloTypeRef, cloTypeDef, false, false, None)
+    CountClosure()
+
+    for fv in cloFreeVars do 
+       /// State variables always get zero-initialized
+       if stateVarsSet.Contains fv then 
+           GenDefaultValue cenv cgbuf eenvouter (fv.Type,m) 
+       else
+           GenGetLocalVal cenv cgbuf eenvouter m fv None
+       
+    CG.EmitInstr cgbuf (pop ilCloFreeVars.Length) (Push [ilCloRetTyOuter]) (I_newobj (ilxCloSpec.Constructor,None))
+    GenSequel cenv eenvouter.cloc cgbuf sequel
 
 
 /// Generate the class for a closure type definition

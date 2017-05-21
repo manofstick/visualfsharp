@@ -224,6 +224,37 @@ namespace Microsoft.FSharp.Core.CompilerServices
         /// <returns>The initialized event.</returns>
         val CreateEvent : addHandler : ('Delegate -> unit) -> removeHandler : ('Delegate -> unit) -> createHandler : ((obj -> 'Args -> unit) -> 'Delegate) -> Microsoft.FSharp.Control.IEvent<'Delegate,'Args>
 
+
+    [<AbstractClass>]
+    /// <summary>The F# compiler emits implementations of this type for compiled sequence expressions.</summary>
+    type ThinGeneratedSequenceBase<'T> =
+        inherit SeqComposition.Core.EnumerableBase<'T>
+        /// <summary>The F# compiler emits implementations of this type for compiled sequence expressions.</summary>
+        ///
+        /// <returns>A new sequence generator for the expression.</returns>
+        new : unit -> ThinGeneratedSequenceBase<'T>
+        /// <summary>The F# compiler emits implementations of this type for compiled sequence expressions.</summary>
+        ///
+        /// <returns>A new enumerator for the sequence.</returns>
+        abstract GetFreshEnumerator : unit -> IEnumerator<'T>
+        /// <summary>The F# compiler emits implementations of this type for compiled sequence expressions.</summary>
+        ///
+        /// <param name="result">A reference to the sequence.</param>
+        ///
+        /// <returns>A 0, 1, and 2 respectively indicate Stop, Yield, and Goto conditions for the sequence generator.</returns>
+        abstract GenerateNext : result:byref<IEnumerable<'T>> -> int
+        /// <summary>The F# compiler emits implementations of this type for compiled sequence expressions.</summary>
+        abstract Close: unit -> unit
+        /// <summary>The F# compiler emits implementations of this type for compiled sequence expressions.</summary>
+        abstract CheckClose: bool
+        /// <summary>The F# compiler emits implementations of this type for compiled sequence expressions.</summary>
+        abstract LastGenerated : 'T
+        interface IEnumerable<'T> 
+        interface IEnumerable
+        interface IEnumerator<'T> 
+        interface IEnumerator 
+        interface SeqComposition.ISeq<'T>
+
     [<AbstractClass>]
     /// <summary>The F# compiler emits implementations of this type for compiled sequence expressions.</summary>
     type GeneratedSequenceBase<'T> =
