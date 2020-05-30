@@ -128,6 +128,19 @@
     IL_0015:  ret
   } // end of method Expr::__DebugDisplay
 
+  .method public strict virtual instance string 
+          ToString() cil managed
+  {
+    // Code size       22 (0x16)
+    .maxstack  8
+    IL_0000:  ldstr      "%A"
+    IL_0005:  newobj     instance void class [FSharp.Core]Microsoft.FSharp.Core.PrintfFormat`5<class [FSharp.Core]Microsoft.FSharp.Core.FSharpFunc`2<class XYZ.Expr,string>,class [FSharp.Core]Microsoft.FSharp.Core.Unit,string,string,string>::.ctor(string)
+    IL_000a:  call       !!0 [FSharp.Core]Microsoft.FSharp.Core.ExtraTopLevelOperators::PrintFormatToString<class [FSharp.Core]Microsoft.FSharp.Core.FSharpFunc`2<class XYZ.Expr,string>>(class [FSharp.Core]Microsoft.FSharp.Core.PrintfFormat`4<!!0,class [FSharp.Core]Microsoft.FSharp.Core.Unit,string,string>)
+    IL_000f:  ldarg.0
+    IL_0010:  callvirt   instance !1 class [FSharp.Core]Microsoft.FSharp.Core.FSharpFunc`2<class XYZ.Expr,string>::Invoke(!0)
+    IL_0015:  ret
+  } // end of method Expr::ToString
+
   .method public hidebysig virtual final 
           instance int32  CompareTo(class XYZ.Expr obj) cil managed
   {
@@ -913,6 +926,19 @@
       IL_0015:  ret
     } // end of method Expr::__DebugDisplay
 
+    .method public strict virtual instance string 
+            ToString() cil managed
+    {
+      // Code size       22 (0x16)
+      .maxstack  8
+      IL_0000:  ldstr      "%A"
+      IL_0005:  newobj     instance void class [FSharp.Core]Microsoft.FSharp.Core.PrintfFormat`5<class [FSharp.Core]Microsoft.FSharp.Core.FSharpFunc`2<class XYZ.ABC/Expr,string>,class [FSharp.Core]Microsoft.FSharp.Core.Unit,string,string,string>::.ctor(string)
+      IL_000a:  call       !!0 [FSharp.Core]Microsoft.FSharp.Core.ExtraTopLevelOperators::PrintFormatToString<class [FSharp.Core]Microsoft.FSharp.Core.FSharpFunc`2<class XYZ.ABC/Expr,string>>(class [FSharp.Core]Microsoft.FSharp.Core.PrintfFormat`4<!!0,class [FSharp.Core]Microsoft.FSharp.Core.Unit,string,string>)
+      IL_000f:  ldarg.0
+      IL_0010:  callvirt   instance !1 class [FSharp.Core]Microsoft.FSharp.Core.FSharpFunc`2<class XYZ.ABC/Expr,string>::Invoke(!0)
+      IL_0015:  ret
+    } // end of method Expr::ToString
+
     .method public hidebysig virtual final 
             instance int32  CompareTo(class XYZ.ABC/Expr obj) cil managed
     {
@@ -1697,6 +1723,19 @@
         IL_0015:  ret
       } // end of method Expr::__DebugDisplay
 
+      .method public strict virtual instance string 
+              ToString() cil managed
+      {
+        // Code size       22 (0x16)
+        .maxstack  8
+        IL_0000:  ldstr      "%A"
+        IL_0005:  newobj     instance void class [FSharp.Core]Microsoft.FSharp.Core.PrintfFormat`5<class [FSharp.Core]Microsoft.FSharp.Core.FSharpFunc`2<class XYZ.ABC/ABC/Expr,string>,class [FSharp.Core]Microsoft.FSharp.Core.Unit,string,string,string>::.ctor(string)
+        IL_000a:  call       !!0 [FSharp.Core]Microsoft.FSharp.Core.ExtraTopLevelOperators::PrintFormatToString<class [FSharp.Core]Microsoft.FSharp.Core.FSharpFunc`2<class XYZ.ABC/ABC/Expr,string>>(class [FSharp.Core]Microsoft.FSharp.Core.PrintfFormat`4<!!0,class [FSharp.Core]Microsoft.FSharp.Core.Unit,string,string>)
+        IL_000f:  ldarg.0
+        IL_0010:  callvirt   instance !1 class [FSharp.Core]Microsoft.FSharp.Core.FSharpFunc`2<class XYZ.ABC/ABC/Expr,string>::Invoke(!0)
+        IL_0015:  ret
+      } // end of method Expr::ToString
+
       .method public hidebysig virtual final 
               instance int32  CompareTo(class XYZ.ABC/ABC/Expr obj) cil managed
       {
@@ -2471,18 +2510,17 @@
   {
     // Code size       14 (0xe)
     .maxstack  3
-    .locals init ([0] string V_0,
-             [1] string greeting)
-    .line 19,19 : 9,31
+    .locals init ([0] string greeting,
+             [1] string V_1)
+    .line 19,19 : 9,31 ''
     IL_0000:  nop
     IL_0001:  call       string XYZ.ABC::get_greeting()
     IL_0006:  stloc.0
-    .line 29,29 : 13,35
+    .line 29,29 : 13,35 ''
     IL_0007:  call       string XYZ.ABC/ABC::get_greeting()
     IL_000c:  stloc.1
     IL_000d:  ret
   } // end of method $ToplevelNamespace::.cctor
-
 } // end of class '<StartupCode$ToplevelNamespaceP>'.$ToplevelNamespace
 
 

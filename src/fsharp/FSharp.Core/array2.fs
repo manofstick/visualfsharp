@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
 namespace Microsoft.FSharp.Collections
 
@@ -8,14 +8,15 @@ namespace Microsoft.FSharp.Collections
     open Microsoft.FSharp.Core.Operators
     open Microsoft.FSharp.Core.Operators.Checked
 
+    #nowarn "3218" // mismatch of parameter name where 'count1' --> 'length1' would shadow function in module of same name
+
     [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
     [<RequireQualifiedAccess>]
     module Array2D =
 
         let inline checkNonNull argName arg = 
-            match box arg with 
-            | null -> nullArg argName 
-            | _ -> ()
+            if isNull arg then
+                nullArg argName
 
         // Define the primitive operations. 
         // Note: the "type" syntax is for the type parameter for inline 
@@ -24,97 +25,99 @@ namespace Microsoft.FSharp.Collections
 
         [<CompiledName("Length1")>]
         let length1 (array: 'T[,]) =  (# "ldlen.multi 2 0" array : int #)  
+
         [<CompiledName("Length2")>]
         let length2 (array: 'T[,]) =  (# "ldlen.multi 2 1" array : int #)  
+
         [<CompiledName("Base1")>]
         let base1 (array: 'T[,]) = array.GetLowerBound(0)  
+
         [<CompiledName("Base2")>]
         let base2 (array: 'T[,]) = array.GetLowerBound(1) 
+
         [<CompiledName("Get")>]
-        let get (array: 'T[,]) (n:int) (m:int) =  (# "ldelem.multi 2 !0" type ('T) array n m : 'T #)  
+        let get (array: 'T[,]) (index1:int) (index2:int) = 
+            (# "ldelem.multi 2 !0" type ('T) array index1 index2 : 'T #)  
+
         [<CompiledName("Set")>]
-        let set (array: 'T[,]) (n:int) (m:int) (x:'T) =  (# "stelem.multi 2 !0" type ('T) array n m x #)  
+        let set (array: 'T[,]) (index1:int) (index2:int) (value:'T) =  
+            (# "stelem.multi 2 !0" type ('T) array index1 index2 value #)  
 
         [<CompiledName("ZeroCreate")>]
-        let zeroCreate (n:int) (m:int) = 
-            if n < 0 then invalidArgInputMustBeNonNegative "length1" n 
-            if m < 0 then invalidArgInputMustBeNonNegative "length2" m 
-            (# "newarr.multi 2 !0" type ('T) n m : 'T[,] #)
+        let zeroCreate (length1: int) (length2: int) = 
+            if length1 < 0 then invalidArgInputMustBeNonNegative "length1" length1 
+            if length2 < 0 then invalidArgInputMustBeNonNegative "length2" length2 
+            (# "newarr.multi 2 !0" type ('T) length1 length2 : 'T[,] #)
 
         [<CompiledName("ZeroCreateBased")>]
-        let zeroCreateBased (b1:int) (b2:int) (n1:int) (n2:int) = 
-            if (b1 = 0 && b2 = 0) then 
-#if FX_ATLEAST_PORTABLE
-                zeroCreate n1 n2
+        let zeroCreateBased (base1:int) (base2:int) (length1:int) (length2:int) = 
+            if base1 = 0 && base2 = 0 then 
+#if NETSTANDARD
+                zeroCreate length1 length2
 #else                
                 // Note: this overload is available on Compact Framework and Silverlight, but not Portable
-                (System.Array.CreateInstance(typeof<'T>, [|n1;n2|]) :?> 'T[,])
+                (System.Array.CreateInstance(typeof<'T>, [|length1;length2|]) :?> 'T[,])
 #endif                
             else
-#if FX_NO_BASED_ARRAYS
-                raise (NotSupportedException(SR.GetString(SR.nonZeroBasedDisallowed)))
-#else
-                (Array.CreateInstance(typeof<'T>, [|n1;n2|],[|b1;b2|]) :?> 'T[,])
-#endif
+                (Array.CreateInstance(typeof<'T>, [|length1;length2|], [|base1;base2|]) :?> 'T[,])
 
         [<CompiledName("CreateBased")>]
-        let createBased b1 b2 n m (x:'T) = 
-            let array = (zeroCreateBased b1 b2 n m : 'T[,])  
-            for i = b1 to b1+n - 1 do 
-              for j = b2 to b2+m - 1 do 
-                array.[i,j] <- x
+        let createBased base1 base2 length1 length2 (initial:'T) = 
+            let array = (zeroCreateBased base1 base2 length1 length2 : 'T[,])
+            for i = base1 to base1 + length1 - 1 do 
+              for j = base2 to base2 + length2 - 1 do 
+                array.[i, j] <- initial
             array
 
         [<CompiledName("InitializeBased")>]
-        let initBased b1 b2 n m f = 
-            let array = (zeroCreateBased b1 b2 n m : 'T[,])
-            let f = OptimizedClosures.FSharpFunc<_,_,_>.Adapt(f)
-            for i = b1 to b1+n - 1 do 
-              for j = b2 to b2+m - 1 do 
-                array.[i,j] <- f.Invoke(i, j)
+        let initBased base1 base2 length1 length2 initializer = 
+            let array = (zeroCreateBased base1 base2 length1 length2 : 'T[,])
+            let f = OptimizedClosures.FSharpFunc<_,_,_>.Adapt(initializer)
+            for i = base1 to base1 + length1 - 1 do 
+              for j = base2 to base2 + length2 - 1 do 
+                array.[i, j] <- f.Invoke(i, j)
             array
 
-
         [<CompiledName("Create")>]
-        let create n m (x:'T) = 
-            createBased 0 0 n m x
+        let create length1 length2 (value:'T) = 
+            createBased 0 0 length1 length2 value
 
         [<CompiledName("Initialize")>]
-        let init n m f = 
-            initBased 0 0 n m f
+        let init length1 length2 initializer = 
+            initBased 0 0 length1 length2 initializer
 
         [<CompiledName("Iterate")>]
-        let iter f array = 
+        let iter action array = 
             checkNonNull "array" array
             let count1 = length1 array 
             let count2 = length2 array 
             let b1 = base1 array 
             let b2 = base2 array 
-            for i = b1 to b1+count1 - 1 do 
-              for j = b2 to b2+count2 - 1 do 
-                f array.[i,j]
+            for i = b1 to b1 + count1 - 1 do 
+              for j = b2 to b2 + count2 - 1 do 
+                action array.[i, j]
 
         [<CompiledName("IterateIndexed")>]
-        let iteri (f : int -> int -> 'T -> unit) (array:'T[,]) =
+        let iteri (action : int -> int -> 'T -> unit) (array:'T[,]) =
             checkNonNull "array" array
-            let count1 = length1 array 
-            let count2 = length2 array 
-            let b1 = base1 array 
-            let b2 = base2 array 
-            let f = OptimizedClosures.FSharpFunc<_,_,_,_>.Adapt(f)
-            for i = b1 to b1+count1 - 1 do 
-              for j = b2 to b2+count2 - 1 do 
-                f.Invoke(i, j, array.[i,j])
+            let count1 = length1 array
+            let count2 = length2 array
+            let b1 = base1 array
+            let b2 = base2 array
+            let f = OptimizedClosures.FSharpFunc<_, _, _, _>.Adapt(action)
+            for i = b1 to b1 + count1 - 1 do
+              for j = b2 to b2 + count2 - 1 do
+                f.Invoke(i, j, array.[i, j])
 
         [<CompiledName("Map")>]
-        let map f array = 
+        let map mapping array = 
             checkNonNull "array" array
-            initBased (base1 array) (base2 array) (length1 array) (length2 array) (fun i j -> f array.[i,j])
+            initBased (base1 array) (base2 array) (length1 array) (length2 array) (fun i j -> mapping array.[i,j])
 
         [<CompiledName("MapIndexed")>]
-        let mapi f array = 
+        let mapi mapping array = 
             checkNonNull "array" array
-            let f = OptimizedClosures.FSharpFunc<_,_,_,_>.Adapt(f)
+            let f = OptimizedClosures.FSharpFunc<_, _, _, _>.Adapt(mapping)
             initBased (base1 array) (base2 array) (length1 array) (length2 array) (fun i j -> f.Invoke(i, j, array.[i,j]))
 
         [<CompiledName("Copy")>]
@@ -127,16 +130,16 @@ namespace Microsoft.FSharp.Collections
             checkNonNull "array" array
             let b1 = base1 array
             let b2 = base2 array
-            init (length1 array) (length2 array) (fun i j -> array.[b1+i,b2+j])
+            init (length1 array) (length2 array) (fun i j -> array.[b1 + i, b2 + j])
 
         [<CompiledName("CopyTo")>]
         let blit (source : 'T[,])  sourceIndex1 sourceIndex2 (target: 'T[,]) targetIndex1 targetIndex2 count1 count2 = 
             checkNonNull "source" source
             checkNonNull "target" target
 
-            let sourceX0, sourceY0 = source.GetLowerBound 0     , source.GetLowerBound 1
+            let sourceX0, sourceY0 = source.GetLowerBound 0, source.GetLowerBound 1
             let sourceXN, sourceYN = (length1 source) + sourceX0, (length2 source) + sourceY0  
-            let targetX0, targetY0 = target.GetLowerBound 0     , target.GetLowerBound 1
+            let targetX0, targetY0 = target.GetLowerBound 0, target.GetLowerBound 1
             let targetXN, targetYN = (length1 target) + targetX0, (length2 target) + targetY0  
 
             if sourceIndex1 < sourceX0 then invalidArgOutOfRange "sourceIndex1" sourceIndex1 "source axis-0 lower bound" sourceX0
@@ -144,16 +147,14 @@ namespace Microsoft.FSharp.Collections
             if targetIndex1 < targetX0 then invalidArgOutOfRange "targetIndex1" targetIndex1 "target axis-0 lower bound" targetX0
             if targetIndex2 < targetY0 then invalidArgOutOfRange "targetIndex2" targetIndex2 "target axis-1 lower bound" targetY0
             if sourceIndex1 + count1 > sourceXN then 
-                invalidArgOutOfRange "count1" count1 ("source axis-0 end index = " + string(sourceIndex1+count1) + " source axis-0 upper bound") sourceXN
+                invalidArgOutOfRange "count1" count1 ("source axis-0 end index = " + string(sourceIndex1 + count1) + " source axis-0 upper bound") sourceXN
             if sourceIndex2 + count2 > sourceYN then 
-                invalidArgOutOfRange "count2" count2 ("source axis-1 end index = " + string(sourceIndex2+count2) + " source axis-1 upper bound") sourceYN
+                invalidArgOutOfRange "count2" count2 ("source axis-1 end index = " + string(sourceIndex2 + count2) + " source axis-1 upper bound") sourceYN
             if targetIndex1 + count1 > targetXN then 
-                invalidArgOutOfRange "count1" count1 ("target axis-0 end index = " + string(targetIndex1+count1) + " target axis-0 upper bound") targetXN
+                invalidArgOutOfRange "count1" count1 ("target axis-0 end index = " + string(targetIndex1 + count1) + " target axis-0 upper bound") targetXN
             if targetIndex2 + count2 > targetYN then 
-                invalidArgOutOfRange "count2" count2 ("target axis-1 end index = " + string(targetIndex2+count2) + " target axis-1 upper bound") targetYN
+                invalidArgOutOfRange "count2" count2 ("target axis-1 end index = " + string(targetIndex2 + count2) + " target axis-1 upper bound") targetYN
 
             for i = 0 to count1 - 1 do
                 for j = 0 to count2 - 1 do
-                    target.[targetIndex1+i,targetIndex2+j] <- source.[sourceIndex1+i,sourceIndex2+j]
-
-        
+                    target.[targetIndex1 + i, targetIndex2 + j] <- source.[sourceIndex1 + i, sourceIndex2 + j]

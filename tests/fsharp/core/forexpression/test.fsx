@@ -1,4 +1,4 @@
-#if Portable
+#if TESTS_AS_APP
 module Core_forexpression
 #endif
 
@@ -6,20 +6,6 @@ let failures = ref false
 let report_failure () = 
   stderr.WriteLine " NO"; failures := true
 let test s b = stderr.Write(s:string);  if b then stderr.WriteLine " OK" else report_failure() 
-
-#if NetCore
-#else
-let argv = System.Environment.GetCommandLineArgs() 
-let SetCulture() = 
-  if argv.Length > 2 && argv.[1] = "--culture" then  begin
-    let cultureString = argv.[2] in 
-    let culture = new System.Globalization.CultureInfo(cultureString) in 
-    stdout.WriteLine ("Running under culture "+culture.ToString()+"...");
-    System.Threading.Thread.CurrentThread.CurrentCulture <-  culture
-  end 
-  
-do SetCulture()    
-#endif
 
 open System
 open System.Collections.Generic
@@ -33,6 +19,7 @@ let testData    =
 let expectedArraySum        = 167167000 // Find an expression for this sum from count
 let expectedRangeSum        = ((count + 1) * count) / 2
 let expectedStringSum       = 30
+let expectedWildCard        = count + 1
 
 let getTestData (inner : int [] -> #seq<int>) (outer : #seq<int> [] -> #seq<'U>) =
     (testData |> Array.map inner) |> outer
@@ -123,11 +110,7 @@ let sumOverRange () =
 let sumOverString () =
     let mutable sum = 0
     for i in testString do
-#if Portable
-        sum <- sum + ((int (i :?> char)) - (int '0'))
-#else
         sum <- sum + ((int i) - (int '0'))
-#endif
     sum
 
 let arraySum                = sumOverArray ()
@@ -148,6 +131,10 @@ do test "ilistSum"          (expectedArraySum   = ilistSum      )
 do test "rangeSum"          (expectedRangeSum   = rangeSum      )
 do test "stringSum"         (expectedStringSum  = stringSum     )
 
+#if TESTS_AS_APP
+let RUN() = !failures
+#else
 let aa =
     if !failures then stdout.WriteLine "Test Failed"; exit 1
     else stdout.WriteLine "Test Passed"; System.IO.File.WriteAllText("test.ok","ok"); exit 0
+#endif

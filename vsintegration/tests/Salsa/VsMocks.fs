@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
 (*
     Mocks of major Visual Studio interfaces.
@@ -1441,6 +1441,7 @@ module internal VsMocks =
 
         let add1, remove1, enumerate1 = mkEventsStorage()
         let add2, remove2, _ = mkEventsStorage()
+        let add4, remove4, _ = mkEventsStorage()
         let configDict = new Dictionary<IVsHierarchy,string>()
         let configChangeNotifier(h : IVsHierarchy, s : string) = 
             if configDict.ContainsKey(h) then
@@ -1517,10 +1518,39 @@ module internal VsMocks =
                 member x.QueryBuildManagerBusyEx(a) = err(__LINE__)
                 member x.UnadviseUpdateSolutionEvents3(a) =
                     0
+              interface IVsSolutionBuildManager5 with
+                member x.AdviseUpdateSolutionEvents4(pIVsUpdateSolutionEvents, pdwCookie) =
+                    pdwCookie <- add4 pIVsUpdateSolutionEvents
+                member x.AdviseUpdateSolutionEventsAsync(a,b) = err(__LINE__) |> ignore
+                member x.FindActiveProjectCfgName(_projectGuid,outCfgString) = 
+                    // For now ignore the _projectGuid and just return the last notified configuration
+                    match configDict |> Seq.tryHead with 
+                    | None -> err(__LINE__) 
+                    | Some (KeyValue(_,v)) -> 
+                        outCfgString <- v
+                        0
+
+                member x.UnadviseUpdateSolutionEventsAsync(a) = err(__LINE__) |> ignore
+                member x.UnadviseUpdateSolutionEvents4(dwCookie) =
+                    remove4 dwCookie
         }
         vsSolutionBuildManager, configChangeNotifier
+    
+    let vsThreadedWaitDialogFactory =
+        { new IVsThreadedWaitDialogFactory with
+            override x.CreateInstance(vsThreadedWaitDialog) =
+                vsThreadedWaitDialog <-
+                    { new IVsThreadedWaitDialog2 with
+                        override x.EndWaitDialog(_) = 0
+                        override x.HasCanceled(_) = 0
+                        override x.StartWaitDialog(_, _, _, _, _, _, _, _) = 0
+                        override x.StartWaitDialogWithPercentageProgress(_, _, _, _, _, _, _, _, _) = 0
+                        override x.UpdateProgress(_, _, _, _, _, _, _) = 0
+                    }
+                0
+        }
         
-    let MakeMockServiceProviderAndConfigChangeNotifierNoTargetFrameworkAssembliesService() = 
+    let MakeMockServiceProviderAndConfigChangeNotifierNoTargetFrameworkAssembliesService() =
         let vsSolutionBuildManager, configChangeNotifier = MakeVsSolutionBuildManagerAndConfigChangeNotifier()
         let sp = new OleServiceProvider()
 
@@ -1538,6 +1568,7 @@ module internal VsMocks =
         sp.AddService(typeof<SVsRunningDocumentTable>, box vsRunningDocumentTable, false)
         sp.AddService(typeof<Microsoft.VisualStudio.Shell.Interop.SVsBuildManagerAccessor>, box (MockVsBuildManagerAccessor()), false)
         sp.AddService(typeof<SVsTrackProjectRetargeting>, box vsTrackProjectRetargeting, false)
+        sp.AddService(typeof<SVsThreadedWaitDialogFactory>, box vsThreadedWaitDialogFactory, false)
         sp, configChangeNotifier
 
     let MakeMockServiceProviderAndConfigChangeNotifier20() =
@@ -1599,63 +1630,54 @@ module internal VsActual =
     // Since the editor exports MEF components, we can use those components directly from unit tests without having to load too many heavy
     // VS assemblies.  Use editor MEF components directly from the VS product.
 
+    open System.Reflection
     open System.IO
     open System.ComponentModel.Composition.Hosting
     open System.ComponentModel.Composition.Primitives
     open Microsoft.VisualStudio.Text
+    open Microsoft.VisualStudio.Threading
+
+    type TestExportJoinableTaskContext () =
+
+        static let jtc = new JoinableTaskContext()
+
+        [<System.ComponentModel.Composition.Export(typeof<JoinableTaskContext>)>]
+        member public __.JoinableTaskContext : JoinableTaskContext = jtc
 
     let vsInstallDir =
         // use the environment variable to find the VS installdir
-#if VS_VERSION_DEV12
-        let vsvar = System.Environment.GetEnvironmentVariable("VS120COMNTOOLS")
-#endif
-#if VS_VERSION_DEV14
-        let vsvar = System.Environment.GetEnvironmentVariable("VS140COMNTOOLS")
-#endif
-#if VS_VERSION_DEV15
-        let vsvar = System.Environment.GetEnvironmentVariable("VS150COMNTOOLS")
-#endif
+        let vsvar =
+            let var = Environment.GetEnvironmentVariable("VS160COMNTOOLS")
+            if String.IsNullOrEmpty var then
+                Environment.GetEnvironmentVariable("VSAPPIDDIR")
+            else
+                var
+        if String.IsNullOrEmpty vsvar then failwith "VS160COMNTOOLS and VSAPPIDDIR environment variables not found."
         Path.Combine(vsvar, "..")
 
     let CreateEditorCatalog() =
-        let root = Path.Combine(vsInstallDir, @"IDE\CommonExtensions\Microsoft\Editor")
-        let CreateAssemblyCatalog(root, file) =
-            let fullPath = System.IO.Path.Combine(root, file)
-            if System.IO.File.Exists(fullPath) then
-                new AssemblyCatalog(fullPath)
-            else
-                failwith("could not find " + fullPath)
-
-        // copy this private assembly next to unit tests, otherwise assembly loader cannot find it
-        let neededLocalAssem = Path.Combine(vsInstallDir, @"IDE\PrivateAssemblies\Microsoft.VisualStudio.Platform.VSEditor.Interop.dll")
-
-#if NUNIT_2
-        let curDir = Path.GetDirectoryName((new System.Uri(System.Reflection.Assembly.Load("nunit.util").EscapedCodeBase)).LocalPath)
-#else
-        let curDir = Path.GetDirectoryName((new System.Uri(System.Reflection.Assembly.Load("nunit.framework").EscapedCodeBase)).LocalPath)
-#endif
-        let localCopy = Path.Combine(curDir, System.IO.Path.GetFileName(neededLocalAssem))
-        System.IO.File.Copy(neededLocalAssem, localCopy, true)
-        
+        let thisAssembly = Assembly.GetExecutingAssembly().Location
+        let thisAssemblyDir = Path.GetDirectoryName(thisAssembly)
         let list = new ResizeArray<ComposablePartCatalog>()
-        list.Add(CreateAssemblyCatalog(root, "Microsoft.VisualStudio.Platform.VSEditor.dll"))
+        let add p =
+            let fullPath = Path.GetFullPath(Path.Combine(thisAssemblyDir, p))
+            if File.Exists(fullPath) then
+                list.Add(new AssemblyCatalog(fullPath))
+            else
+                failwith <| sprintf "unable to find assembly %s" p
 
-        // Must include this because several editor options are actually stored as exported information 
-        // on this DLL.  Including most importantly, the tab size information
-        list.Add(CreateAssemblyCatalog(root, "Microsoft.VisualStudio.Text.Logic.dll"))
-
-        // Include this DLL to get several more EditorOptions including WordWrapStyle
-        list.Add(CreateAssemblyCatalog(root, "Microsoft.VisualStudio.Text.UI.dll"))
-
-        // Include this DLL to get more EditorOptions values
-        list.Add(CreateAssemblyCatalog(root, "Microsoft.VisualStudio.Text.UI.Wpf.dll"))
-
-        // Include this DLL to get more undo operations
-        //list.Add(CreateAssemblyCatalog(root, "StandaloneUndo.dll"))
-        //list.Add(CreateAssemblyCatalog(root, "Microsoft.VisualStudio.Language.StandardClassification.dll"))
-
-        // list.Add(CreateAssemblyCatalog(root, "Microsoft.VisualStudio.Text.Internal.dll"))
-
+        list.Add(new AssemblyCatalog(thisAssembly))
+        [ "Microsoft.VisualStudio.Text.Data.dll"
+          "Microsoft.VisualStudio.Text.Logic.dll"
+          "Microsoft.VisualStudio.Text.Internal.dll"
+          "Microsoft.VisualStudio.Text.UI.dll"
+          "Microsoft.VisualStudio.Text.UI.Wpf.dll"
+          "Microsoft.VisualStudio.Threading.dll"
+          "Microsoft.VisualStudio.Platform.VSEditor.dll"
+          "Microsoft.VisualStudio.Editor.Implementation.dll"
+          "Microsoft.VisualStudio.ComponentModelHost.dll"
+          "Microsoft.VisualStudio.Shell.15.0.dll" ]
+        |> List.iter add
         new AggregateCatalog(list)
 
     let exportProvider = new CompositionContainer(new AggregateCatalog(CreateEditorCatalog()), true, null)

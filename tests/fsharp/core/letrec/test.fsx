@@ -1,32 +1,19 @@
 // #Conformance #LetBindings #Recursion #TypeInference #ObjectConstructors #Classes #Records 
-#if Portable
+#if TESTS_AS_APP
 module Core_letrec
 #endif
 
-let failures = ref false
-let report_failure s = 
-  stderr.WriteLine ("FAIL: "+s); failures := true
+let failures = ref []
 
+let report_failure (s : string) = 
+    stderr.Write" NO: "
+    stderr.WriteLine s
+    failures := !failures @ [s]
 
-
-#if NetCore
-#else
-let argv = System.Environment.GetCommandLineArgs() 
-let SetCulture() = 
-  if argv.Length > 2 && argv.[1] = "--culture" then  begin
-    let cultureString = argv.[2] in 
-    let culture = new System.Globalization.CultureInfo(cultureString) in 
-    stdout.WriteLine ("Running under culture "+culture.ToString()+"...");
-    System.Threading.Thread.CurrentThread.CurrentCulture <-  culture
-  end 
-  
-do SetCulture()    
-#endif
 
 let test t s1 s2 = 
   if s1 <> s2 then 
-    (stderr.WriteLine ("test "+t+" failed");
-     failures := true)
+    report_failure ("test "+t+" failed")
   else
     stdout.WriteLine ("test "+t+" succeeded")   
 
@@ -140,8 +127,7 @@ let WouldFailAtRuntimeTest2 () =
   and a3 = (fun x -> a2 + 2) 1 in 
   a2 + a3
 
-#if Portable
-#else
+#if !TESTS_AS_APP && !NETCOREAPP
 open System
 open System.Windows.Forms
 
@@ -317,8 +303,7 @@ module RecursiveInterfaceObjectExpressions = begin
   
 end
 
-#if Portable
-#else
+#if !TESTS_AS_APP && !NETCOREAPP
 module RecursiveInnerConstrainedGenerics = begin
 
     open System.Windows.Forms
@@ -640,17 +625,35 @@ module BasicPermutations =
           // to the base implementations of overridden members <file> <line>
           override x.Foo a = base.Foo(a)
 
+module Test2 = 
+    let tag = 
+        let mutable i = 0
+        fun _ -> i <- i+1; i // this should _not_ generalize, see https://github.com/Microsoft/visualfsharp/issues/3358
 
-#if Portable
-let aa = 
-    if !failures then (stdout.WriteLine "Test Failed"; exit 1) 
-    else (stdout.WriteLine "Test Passed"; exit 0)
+    test "vwekjwve91" (tag()) 1
+    test "vwekjwve92" (tag()) 2
+    test "vwekjwve93" (tag()) 3
+
+module Test3 = 
+    let rec tag = 
+        let mutable i = 0
+        fun _ -> i <- i+1; i // this should _not_ generalize, see https://github.com/Microsoft/visualfsharp/issues/3358
+
+    test "vwekjwve94" (tag()) 1
+    test "vwekjwve95" (tag()) 2
+    test "vwekjwve96" (tag()) 3
+
+#if TESTS_AS_APP
+let RUN() = !failures
 #else
-do 
-  if !failures then (stdout.WriteLine "Test Failed"; exit 1) 
-
-
-do (stdout.WriteLine "Test Passed"; 
-    System.IO.File.WriteAllText("test.ok","ok"); 
-    exit 0)
+let aa =
+  match !failures with 
+  | [] -> 
+      stdout.WriteLine "Test Passed"
+      System.IO.File.WriteAllText("test.ok","ok")
+      exit 0
+  | _ -> 
+      stdout.WriteLine "Test Failed"
+      exit 1
 #endif
+

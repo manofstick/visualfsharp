@@ -1,6 +1,6 @@
-// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
-using FSLib = Microsoft.FSharp.Compiler.AbstractIL.Internal.Library;
+using FSLib = FSharp.Compiler.AbstractIL.Internal.Library;
 using System;
 using System.Runtime.InteropServices;
 using System.Collections.Generic;
@@ -27,7 +27,7 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
         /// Containes either null if project reference is OK or instance of Task with error message if project reference is invalid
         /// i.e. project A references project B when target framework version for B is higher that for A
         /// </summary>
-        private Task projectRefError;
+        private Shell.Task projectRefError;
 
         /// <summary>
         /// The name of the assembly this refernce represents
@@ -145,32 +145,17 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
             get { return this.referencedProjectName; }
         }
 
-        // This method throws FileNotFoundException if VC is not installed
-        private static void CheckVCProjectMatchesPath(object prjObj, string goalPath, out bool isVCProject, out bool matches)
-        {
-            matches = false;
-            var vcProject = prjObj as Microsoft.VisualStudio.VCProjectEngine.VCProject;
-            isVCProject = vcProject != null;
-            if (isVCProject)
-            {
-                var projectFilePath = vcProject.ProjectFile;
-                if (NativeMethods.IsSamePath(projectFilePath, goalPath))
-                {
-                    matches = true;
-                }
-            }
-        }
-
         private void InitReferencedProject(IVsSolution solution)
         {
             IVsHierarchy hier;
             var hr = solution.GetProjectOfGuid(ref referencedProjectGuid, out hier);
             if (!ErrorHandler.Succeeded(hr))
                 return; // check if project is missing or non-loaded!
-
+            
             object obj;
             hr = hier.GetProperty(VSConstants.VSITEMID_ROOT, (int)__VSHPROPID.VSHPROPID_ExtObject, out obj);
-            ErrorHandler.ThrowOnFailure(hr);
+            if (!ErrorHandler.Succeeded(hr))
+                return;
 
             EnvDTE.Project prj = obj as EnvDTE.Project;
             if (prj == null) 
@@ -180,27 +165,6 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
             if (prj.Properties == null)
             {
                 return;
-            }
-
-            // do things differently for C++
-            try
-            {
-                bool isVCProject;
-                bool itMatches;
-                CheckVCProjectMatchesPath(prj.Object, this.referencedProjectFullPath, out isVCProject, out itMatches);
-                if (itMatches)
-                {
-                    this.referencedProject = prj;
-                    return;
-                }
-                if (isVCProject)
-                {
-                    return;
-                }
-            }
-            catch (System.IO.FileNotFoundException)
-            {
-                // ignore it - VC might not be installed
             }
 
             // Get the full path of the current project.
@@ -280,7 +244,7 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
         /// </summary>
         public void CleanProjectReferenceErrorState()
         {
-            Microsoft.VisualStudio.FSharp.LanguageService.UIThread.DoOnUIThread(() =>
+            UIThread.DoOnUIThread(() =>
                 {
                     if (projectRefError != null)
                     {
@@ -298,14 +262,14 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
         /// <param name="text"></param>
         private void SetError(string text)
         {
-            Microsoft.VisualStudio.FSharp.LanguageService.UIThread.DoOnUIThread(() =>
+            UIThread.DoOnUIThread(() =>
                 {
                     // delete existing error if exists
                     CleanProjectReferenceErrorState();
 
-                    projectRefError = new ErrorTask
+                    projectRefError = new Shell.ErrorTask
                     {
-                        ErrorCategory = TaskErrorCategory.Warning,
+                        ErrorCategory = Shell.TaskErrorCategory.Warning,
                         HierarchyItem = ProjectMgr.InteropSafeIVsHierarchy,
                         Text = text
                     };
@@ -331,7 +295,7 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
         /// </summary>
         public void RefreshProjectReferenceErrorState()
         {
-            Microsoft.VisualStudio.FSharp.LanguageService.UIThread.DoOnUIThread(() =>
+            UIThread.DoOnUIThread(() =>
                 {
                     CleanProjectReferenceErrorState();
 
@@ -659,14 +623,14 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
         /// <summary>
         /// Overridden method. The method updates the build dependency list before removing the node from the hierarchy.
         /// </summary>
-        public override void Remove(bool removeFromStorage)
+        public override void Remove(bool removeFromStorage, bool promptSave = true)
         {
             if (this.ProjectMgr == null || !this.canRemoveReference)
             {
                 return;
             }
             this.ProjectMgr.RemoveBuildDependency(this.buildDependency);
-            base.Remove(removeFromStorage);
+            base.Remove(removeFromStorage, promptSave);
             
             // current reference is removed - delete associated error from list
             CleanProjectReferenceErrorState();
@@ -832,9 +796,18 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
         {
             // copying logic from C#'s project system, langref.cpp: IsProjectReferenceReferenceable()
             var otherFrameworkName = GetProjectTargetFrameworkName(thisProject.Site, referencedProjectGuid);
+            if (otherFrameworkName == null)
+                return FrameworkCompatibility.Ok;
+
             if (String.Compare(otherFrameworkName.Identifier, ".NETPortable", StringComparison.OrdinalIgnoreCase) == 0)
             {
                  // we always allow references to projects that are targeted to the Portable/".NETPortable" fx family
+                return FrameworkCompatibility.Ok;
+            }
+
+            if (String.Compare(otherFrameworkName.Identifier, ".NETStandard", StringComparison.OrdinalIgnoreCase) == 0)
+            {
+                // we always allow references to projects that are targeted to the ".NETStandard" family
                 return FrameworkCompatibility.Ok;
             }
 
@@ -865,8 +838,14 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
         private static System.Runtime.Versioning.FrameworkName GetProjectTargetFrameworkName(System.IServiceProvider serviceProvider, Guid referencedProjectGuid)
         {
             var hierarchy = VsShellUtilities.GetHierarchy(serviceProvider, referencedProjectGuid);
+            if (hierarchy == null)
+                return null;
+
             object otherTargetFrameworkMonikerObj;
-            hierarchy.GetProperty(VSConstants.VSITEMID_ROOT, (int)__VSHPROPID4.VSHPROPID_TargetFrameworkMoniker, out otherTargetFrameworkMonikerObj);
+
+            int hr = hierarchy.GetProperty(VSConstants.VSITEMID_ROOT, (int)__VSHPROPID4.VSHPROPID_TargetFrameworkMoniker, out otherTargetFrameworkMonikerObj);
+            if (!ErrorHandler.Succeeded(hr))
+                return null;
 
             string targetFrameworkMoniker = (string)otherTargetFrameworkMonikerObj;
             return new System.Runtime.Versioning.FrameworkName(targetFrameworkMoniker);

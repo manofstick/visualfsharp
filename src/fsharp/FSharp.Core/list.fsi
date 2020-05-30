@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
 namespace Microsoft.FSharp.Collections
 
@@ -12,7 +12,7 @@ namespace Microsoft.FSharp.Collections
     [<RequireQualifiedAccess>]
     module List = 
 
-        /// <summary>Returns a new list that contains the cartesian product of the two input lists.</summary>
+        /// <summary>Returns a new list that contains all pairings of elements from the first and second lists.</summary>
         /// <param name="list1">The first input list.</param>
         /// <param name="list2">The second input list.</param>
         /// <returns>The resulting list of pairs.</returns>
@@ -171,6 +171,14 @@ namespace Microsoft.FSharp.Collections
         /// <exception cref="System.ArgumentException">Thrown when the input does not have precisely one element.</exception>
         [<CompiledName("ExactlyOne")>]
         val exactlyOne: list:'T list -> 'T
+
+        /// <summary>Returns the only element of the list or <c>None</c> if it is empty or contains more than one element.</summary>
+        ///
+        /// <param name="list">The input list.</param>
+        ///
+        /// <returns>The only element of the list or None.</returns>
+        [<CompiledName("TryExactlyOne")>]
+        val tryExactlyOne: list:'T list -> 'T option
 
         /// <summary>Tests if any element of the list satisfies the given predicate.</summary>
         ///
@@ -372,7 +380,7 @@ namespace Microsoft.FSharp.Collections
         /// <param name="action">The function to apply to elements from the input list.</param>
         /// <param name="list">The input list.</param>
         [<CompiledName("Iterate")>]
-        val iter: action:('T -> unit) -> list:'T list -> unit
+        val inline iter: action:('T -> unit) -> list:'T list -> unit
 
         /// <summary>Applies the given function to two collections simultaneously. The
         /// collections must have identical size.</summary>
@@ -387,7 +395,7 @@ namespace Microsoft.FSharp.Collections
         /// <param name="action">The function to apply to the elements of the list along with their index.</param>
         /// <param name="list">The input list.</param>
         [<CompiledName("IterateIndexed")>]
-        val iteri: action:(int -> 'T -> unit) -> list:'T list -> unit
+        val inline iteri: action:(int -> 'T -> unit) -> list:'T list -> unit
 
         /// <summary>Applies the given function to two collections simultaneously. The
         /// collections must have identical size. The integer passed to the
@@ -781,6 +789,14 @@ namespace Microsoft.FSharp.Collections
         /// <returns>The first element of the list or None.</returns>
         [<CompiledName("TryHead")>]
         val tryHead: list:'T list -> 'T option
+
+        /// <summary>Returns the transpose of the given sequence of lists.</summary>
+        /// <param name="lists">The input sequence of list.</param>
+        /// <returns>The transposed list.</returns>
+        /// <exception cref="System.ArgumentNullException">Thrown when the input sequence is null.</exception>
+        /// <exception cref="System.ArgumentException">Thrown when the input lists differ in length.</exception>
+        [<CompiledName("Transpose")>]
+        val transpose: lists:seq<'T list> -> 'T list list
 
         /// <summary>Returns at most N elements in a new list.</summary>
         /// <param name="count">The maximum number of items to return.</param>

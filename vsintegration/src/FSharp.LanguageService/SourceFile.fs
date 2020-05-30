@@ -1,9 +1,13 @@
-// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
-namespace Microsoft.FSharp.Compiler.VsLanguageService
+//------- DEPRECATED CODE ONLY ACTIVE IN UNIT TESTING VIA "UNROSLYNIZED" UNIT TESTS ---------------
+
+//------- DEPRECATED CODE ONLY ACTIVE IN UNIT TESTING VIA "UNROSLYNIZED" UNIT TESTS ---------------
+
+namespace FSharp.Compiler.VsLanguageService
 open System
 open System.IO
-open Microsoft.FSharp.Compiler
+open FSharp.Compiler
 
 /// Methods for dealing with F# sources files.
 module (*internal*) SourceFile =

@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
 using System;
 using System.Runtime.InteropServices;
@@ -18,10 +18,7 @@ using System.Diagnostics.CodeAnalysis;
 using ShellConstants = Microsoft.VisualStudio.Shell.Interop.Constants;
 using Microsoft.Build.Execution;
 using System.Linq;
-
-#if FX_ATLEAST_45
 using Microsoft.Internal.VisualStudio.PlatformUI;
-#endif
 
 namespace Microsoft.VisualStudio.FSharp.ProjectSystem
 {
@@ -397,7 +394,7 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
             return base.CanDeleteItem(deleteOperation);
         }
 
-        public override void Remove(bool removeFromStorage)
+        public override void Remove(bool removeFromStorage, bool promptSave = true)
         {
             // AssemblyReference doesn't backed by the document - its removal is simply modification of the project file
             // we disable IVsTrackProjectDocuments2 events to avoid confusing messages from SCC
@@ -406,7 +403,7 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
             {
                 ProjectMgr.EventTriggeringFlag = oldFlag | ProjectNode.EventTriggering.DoNotTriggerTrackerEvents;
 
-                base.Remove(removeFromStorage);
+                base.Remove(removeFromStorage, promptSave);
 
                 // invoke ComputeSourcesAndFlags to refresh compiler flags
                 // it was the only useful thing performed by one of IVsTrackProjectDocuments2 listeners
@@ -663,19 +660,17 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
             return VSConstants.guidCOMPLUSLibrary;
         }
 
-#if FX_ATLEAST_45 
         public override object GetProperty(int propId)
         {
             if (propId == (int)__VSHPROPID5.VSHPROPID_ProvisionalViewingStatus)
             {
                 var objectBrowserGuid = VSProjectConstants.guidObjectBrowser;
                 var logicalViewGuid = VSConstants.LOGVIEWID.Primary_guid;
-                IVsUIShellOpenDocument3 shellOpenDocument3 = Package.GetGlobalService(typeof(SVsUIShellOpenDocument)) as IVsUIShellOpenDocument3;
+                IVsUIShellOpenDocument3 shellOpenDocument3 = Microsoft.VisualStudio.Shell.Package.GetGlobalService(typeof(SVsUIShellOpenDocument)) as IVsUIShellOpenDocument3;
                 return shellOpenDocument3.GetProvisionalViewingStatusForEditor(ref objectBrowserGuid, ref logicalViewGuid);
             }
 
             return base.GetProperty(propId);
         }
-#endif
     }
 }

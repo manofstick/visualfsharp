@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
 namespace Microsoft.FSharp.Core
 open Microsoft.FSharp.Core
@@ -32,7 +32,6 @@ module internal List =
     val distinctWithComparer : System.Collections.Generic.IEqualityComparer<'T> -> 'T list -> 'T list
     val distinctByWithComparer : System.Collections.Generic.IEqualityComparer<'Key> -> ('T -> 'Key) -> list:'T list -> 'T list when 'Key : equality
     val init : int -> (int -> 'T) -> 'T list
-    val iter : ('T -> unit) -> 'T list -> unit
     val filter : predicate:('T -> bool) -> 'T list -> 'T list
     val collect : ('T -> 'U list) -> 'T list -> 'U list
     val partition : predicate:('T -> bool) -> 'T list -> 'T list * 'T list
@@ -48,7 +47,6 @@ module internal List =
     val exists : predicate:('T -> bool) -> 'T list -> bool
     val rev: 'T list -> 'T list
     val concat : seq<'T list> -> 'T list
-    val iteri : action:(int -> 'T -> unit) -> 'T list -> unit
     val unfold : ('State -> ('T * 'State) option) -> 'State -> 'T list
     val unzip : ('T1 * 'T2) list -> 'T1 list * 'T2 list
     val unzip3 : ('T1 * 'T2 * 'T3) list -> 'T1 list * 'T2 list * 'T3 list
@@ -63,7 +61,9 @@ module internal List =
     val toArray : 'T list -> 'T[]
     val inline ofSeq : seq<'T> -> 'T List
     val splitAt : int -> 'T list -> ('T list * 'T list)
+    val transpose : 'T list list -> 'T list list
     val truncate : int -> 'T list -> 'T list
+    val tryLastV : 'T list -> 'T ValueOption
 
 module internal Array =
     // The input parameter should be checked by callers if necessary
@@ -100,3 +100,6 @@ module internal Array =
     val stableSortInPlaceWith: comparer:('T -> 'T -> int) -> array:'T[] -> unit
 
     val stableSortInPlace: array:'T[] -> unit when 'T : comparison 
+
+module internal Seq =
+    val tryLastV : 'T seq -> 'T ValueOption

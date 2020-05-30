@@ -1,4 +1,4 @@
-' Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+' Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
 Imports System
 Imports System.Collections.Generic
@@ -93,7 +93,7 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
         Private components As System.ComponentModel.IContainer
 
         'PERF: A note about the labels used as lines.  The 3D label is being set to 1 px high,
-        '   so you’re really only using the grey part of it.  Using BorderStyle.Fixed3D seems
+        '   so youï¿½re really only using the grey part of it.  Using BorderStyle.Fixed3D seems
         '   to fire an extra resize OnHandleCreated.  The simple solution is to use BorderStyle.None
         '   and BackColor = SystemColors.ControlDark.
 
@@ -202,7 +202,7 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
             resources.ApplyResources(Me.cboWarningLevel, "cboWarningLevel")
             Me.cboWarningLevel.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList
             Me.cboWarningLevel.FormattingEnabled = True
-            Me.cboWarningLevel.Items.AddRange(New Object() {"0", "1", "2", "3", "4", "5"})
+            Me.cboWarningLevel.Items.AddRange(New Object() {resources.GetString("cboWarningLevel.Items"), resources.GetString("cboWarningLevel.Items1"), resources.GetString("cboWarningLevel.Items2"), resources.GetString("cboWarningLevel.Items3"), resources.GetString("cboWarningLevel.Items4"), resources.GetString("cboWarningLevel.Items5")})
             Me.cboWarningLevel.Name = "cboWarningLevel"
             '
             'lblSupressWarnings
@@ -452,56 +452,32 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
         Protected Overrides ReadOnly Property ControlData() As PropertyControlData()
             Get
                 If m_ControlData Is Nothing Then
-#If FX_ATLEAST_45 Then
-                    m_ControlData = New PropertyControlData() { _
-                     New PropertyControlData(VsProjPropId.VBPROJPROPID_DefineConstants, "DefineConstants", Me.txtConditionalCompilationSymbols, AddressOf ConditionalCompilationSet, AddressOf ConditionalCompilationGet, ControlDataFlags.None, New Control() {Me.txtConditionalCompilationSymbols, Me.chkDefineDebug, Me.chkDefineTrace, Me.lblConditionalCompilationSymbols}), _
-                     New PropertyControlData(VsProjPropId80.VBPROJPROPID_PlatformTarget, "PlatformTarget", Me.cboPlatformTarget, AddressOf PlatformTargetSet, AddressOf PlatformTargetGet, ControlDataFlags.None, New Control() {Me.lblPlatformTarget}), _
-                     New SingleConfigPropertyControlData(SingleConfigPropertyControlData.Configs.Release, _
-                        VsProjPropId.VBPROJPROPID_Optimize, "Optimize", Me.chkOptimizeCode), _
-                     New SingleConfigPropertyControlData(SingleConfigPropertyControlData.Configs.Release, _
-                        VsProjPropId.VBPROJPROPID_AllowUnsafeBlocks, "Tailcalls", Me.chkTailcalls), _
-                     New PropertyControlData(VsProjPropId.VBPROJPROPID_WarningLevel, "WarningLevel", Me.cboWarningLevel, AddressOf WarningLevelSet, AddressOf WarningLevelGet, ControlDataFlags.None, New Control() {lblWarningLevel}), _
-                     New PropertyControlData(VsProjPropId2.VBPROJPROPID_NoWarn, "NoWarn", Me.txtSupressWarnings, New Control() {Me.lblSupressWarnings}), _
-                     New PropertyControlData(VsProjPropId.VBPROJPROPID_TreatWarningsAsErrors, "TreatWarningsAsErrors", Me.rbWarningAll, AddressOf TreatWarningsInit, AddressOf TreatWarningsGet), _
-                     New PropertyControlData(VsProjPropId80.VBPROJPROPID_TreatSpecificWarningsAsErrors, "TreatSpecificWarningsAsErrors", Me.txtSpecificWarnings, AddressOf TreatSpecificWarningsInit, AddressOf TreatSpecificWarningsGet), _
-                     New SingleConfigPropertyControlData(SingleConfigPropertyControlData.Configs.Release, _
-                        VsProjPropId.VBPROJPROPID_OutputPath, "OutputPath", Me.txtOutputPath, New Control() {Me.lblOutputPath}), _
-                     New PropertyControlData(VsProjPropId.VBPROJPROPID_DocumentationFile, "DocumentationFile", Me.txtXMLDocumentationFile, AddressOf Me.XMLDocumentationFileInit, AddressOf Me.XMLDocumentationFileGet, ControlDataFlags.None, New Control() {Me.txtXMLDocumentationFile, Me.chkXMLDocumentationFile}), _
-                     New PropertyControlData(VsProjPropId.VBPROJPROPID_OutputType, "OutputType", Nothing, AddressOf Me.OutputTypeSet, Nothing), _
-                     New PropertyControlData(VsProjPropId.VBPROJPROPID_Unused1, "OtherFlags", Me.txtOtherFlags, New Control() {Me.txtOtherFlags, Me.lblOtherFlags}), _
+                    m_ControlData = New PropertyControlData() {
+                     New PropertyControlData(VsProjPropId.VBPROJPROPID_DefineConstants, "DefineConstants", Me.txtConditionalCompilationSymbols, AddressOf ConditionalCompilationSet, AddressOf ConditionalCompilationGet, ControlDataFlags.None, New Control() {Me.txtConditionalCompilationSymbols, Me.chkDefineDebug, Me.chkDefineTrace, Me.lblConditionalCompilationSymbols}),
+                     New PropertyControlData(VsProjPropId80.VBPROJPROPID_PlatformTarget, "PlatformTarget", Me.cboPlatformTarget, AddressOf PlatformTargetSet, AddressOf PlatformTargetGet, ControlDataFlags.None, New Control() {Me.lblPlatformTarget}),
+                     New SingleConfigPropertyControlData(SingleConfigPropertyControlData.Configs.Release,
+                        VsProjPropId.VBPROJPROPID_Optimize, "Optimize", Me.chkOptimizeCode),
+                     New SingleConfigPropertyControlData(SingleConfigPropertyControlData.Configs.Release,
+                        VsProjPropId.VBPROJPROPID_AllowUnsafeBlocks, "Tailcalls", Me.chkTailcalls),
+                     New PropertyControlData(VsProjPropId.VBPROJPROPID_WarningLevel, "WarningLevel", Me.cboWarningLevel, AddressOf WarningLevelSet, AddressOf WarningLevelGet, ControlDataFlags.None, New Control() {lblWarningLevel}),
+                     New PropertyControlData(VsProjPropId2.VBPROJPROPID_NoWarn, "NoWarn", Me.txtSupressWarnings, New Control() {Me.lblSupressWarnings}),
+                     New PropertyControlData(VsProjPropId.VBPROJPROPID_TreatWarningsAsErrors, "TreatWarningsAsErrors", Me.rbWarningAll, AddressOf TreatWarningsInit, AddressOf TreatWarningsGet),
+                     New PropertyControlData(VsProjPropId80.VBPROJPROPID_TreatSpecificWarningsAsErrors, "TreatSpecificWarningsAsErrors", Me.txtSpecificWarnings, AddressOf TreatSpecificWarningsInit, AddressOf TreatSpecificWarningsGet),
+                     New SingleConfigPropertyControlData(SingleConfigPropertyControlData.Configs.Release,
+                        VsProjPropId.VBPROJPROPID_OutputPath, "OutputPath", Me.txtOutputPath, New Control() {Me.lblOutputPath}),
+                     New PropertyControlData(VsProjPropId.VBPROJPROPID_DocumentationFile, "DocumentationFile", Me.txtXMLDocumentationFile, AddressOf Me.XMLDocumentationFileInit, AddressOf Me.XMLDocumentationFileGet, ControlDataFlags.None, New Control() {Me.txtXMLDocumentationFile, Me.chkXMLDocumentationFile}),
+                     New PropertyControlData(VsProjPropId.VBPROJPROPID_OutputType, "OutputType", Nothing, AddressOf Me.OutputTypeSet, Nothing),
+                     New PropertyControlData(VsProjPropId.VBPROJPROPID_Unused1, "OtherFlags", Me.txtOtherFlags, New Control() {Me.txtOtherFlags, Me.lblOtherFlags}),
                      New PropertyControlData(VsProjPropId110.VBPROJPROPID_Prefer32Bit, "Prefer32Bit", Me.chkPrefer32Bit, AddressOf Prefer32BitSet, AddressOf Prefer32BitGet)
                      }
 
-#Else
-                    m_ControlData = New PropertyControlData() { _
-                     New PropertyControlData(VsProjPropId.VBPROJPROPID_DefineConstants, "DefineConstants", Me.txtConditionalCompilationSymbols, AddressOf ConditionalCompilationSet, AddressOf ConditionalCompilationGet, ControlDataFlags.None, New Control() {Me.txtConditionalCompilationSymbols, Me.chkDefineDebug, Me.chkDefineTrace, Me.lblConditionalCompilationSymbols}), _
-                     New PropertyControlData(VsProjPropId80.VBPROJPROPID_PlatformTarget, "PlatformTarget", Me.cboPlatformTarget, AddressOf PlatformTargetSet, AddressOf PlatformTargetGet, ControlDataFlags.None, New Control() {Me.lblPlatformTarget}), _
-                     New SingleConfigPropertyControlData(SingleConfigPropertyControlData.Configs.Release, _
-                        VsProjPropId.VBPROJPROPID_Optimize, "Optimize", Me.chkOptimizeCode), _
-                     New SingleConfigPropertyControlData(SingleConfigPropertyControlData.Configs.Release, _
-                        VsProjPropId.VBPROJPROPID_AllowUnsafeBlocks, "Tailcalls", Me.chkTailcalls), _
-                     New PropertyControlData(VsProjPropId.VBPROJPROPID_WarningLevel, "WarningLevel", Me.cboWarningLevel, AddressOf WarningLevelSet, AddressOf WarningLevelGet, ControlDataFlags.None, New Control() {lblWarningLevel}), _
-                     New PropertyControlData(VsProjPropId2.VBPROJPROPID_NoWarn, "NoWarn", Me.txtSupressWarnings, New Control() {Me.lblSupressWarnings}), _
-                     New PropertyControlData(VsProjPropId.VBPROJPROPID_TreatWarningsAsErrors, "TreatWarningsAsErrors", Me.rbWarningAll, AddressOf TreatWarningsInit, AddressOf TreatWarningsGet), _
-                     New PropertyControlData(VsProjPropId80.VBPROJPROPID_TreatSpecificWarningsAsErrors, "TreatSpecificWarningsAsErrors", Me.txtSpecificWarnings, AddressOf TreatSpecificWarningsInit, AddressOf TreatSpecificWarningsGet), _
-                     New SingleConfigPropertyControlData(SingleConfigPropertyControlData.Configs.Release, _
-                        VsProjPropId.VBPROJPROPID_OutputPath, "OutputPath", Me.txtOutputPath, New Control() {Me.lblOutputPath}), _
-                     New PropertyControlData(VsProjPropId.VBPROJPROPID_DocumentationFile, "DocumentationFile", Me.txtXMLDocumentationFile, AddressOf Me.XMLDocumentationFileInit, AddressOf Me.XMLDocumentationFileGet, ControlDataFlags.None, New Control() {Me.txtXMLDocumentationFile, Me.chkXMLDocumentationFile}), _
-                     New PropertyControlData(VsProjPropId.VBPROJPROPID_OutputType, "OutputType", Nothing, AddressOf Me.OutputTypeSet, Nothing), _
-                     New PropertyControlData(VsProjPropId.VBPROJPROPID_Unused1, "OtherFlags", Me.txtOtherFlags, New Control() {Me.txtOtherFlags, Me.lblOtherFlags})
-                     }
-#End If
                 End If
                 Return m_ControlData
             End Get
         End Property
 
         Private Function IsCurrentProjectDotNetPortable() As Boolean
-#If FX_ATLEAST_45 Then
             Return ApplicationPropPage.IsCurrentProjectDotNetPortable(DTEProject)
-#Else
-            Return False
-#End If
         End Function
 
         ''' <summary>
@@ -669,7 +645,7 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
             End If
 
             ' Remove the project directory path
-            If String.Compare(BasePath, Microsoft.VisualBasic.Strings.Left(DirectoryPath, Len(BasePath)), StringComparison.OrdinalIgnoreCase) = 0 Then
+            If String.Compare(BasePath, VisualBasic.Left(DirectoryPath, Len(BasePath)), StringComparison.OrdinalIgnoreCase) = 0 Then
                 Dim ch As Char = CChar(Mid(DirectoryPath, Len(BasePath), 1))
                 If ch = System.IO.Path.DirectorySeparatorChar OrElse ch = System.IO.Path.AltDirectorySeparatorChar Then
                     RelativePath = Mid(DirectoryPath, Len(BasePath) + 1)
@@ -1272,11 +1248,9 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
 
             Dim propertyValue As Object = Nothing
 
-#If FX_ATLEAST_45 Then
             If VSErrorHandler.Failed(hierarchy.GetProperty(VSITEMID.ROOT, __VSHPROPID5.VSHPROPID_AppContainer, propertyValue)) Then
                 Return False
             End If
-#End If
 
             If propertyValue Is Nothing Then
                 Return False

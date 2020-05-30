@@ -1,10 +1,10 @@
-// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
-namespace Microsoft.FSharp.Compiler.AbstractIL.Internal
+namespace FSharp.Compiler.AbstractIL.Internal
 
 open Internal.Utilities
 open Internal.Utilities.Collections.Tagged
-open Microsoft.FSharp.Compiler.AbstractIL.Internal.Library 
+open FSharp.Compiler.AbstractIL.Internal.Library 
 open System.Collections.Generic
 
 /// Maps with a specific comparison function
@@ -39,8 +39,7 @@ module internal Zmap =
     val chooseL  : ('Key -> 'T -> 'U option) -> Zmap<'Key,'T> -> 'U list
 
     val toList   : Zmap<'Key,'T> -> ('Key * 'T) list
-    val ofList   : IComparer<'Key> -> ('Key * 'T) list -> Zmap<'Key,'T>  
-    val ofFlatList : IComparer<'Key> -> FlatList<'Key * 'T> -> Zmap<'Key,'T>  
+    val ofList   : IComparer<'Key> -> ('Key * 'T) list -> Zmap<'Key,'T>
 
     val keys     : Zmap<'Key,'T> -> 'Key list
     val values   : Zmap<'Key,'T> -> 'T   list

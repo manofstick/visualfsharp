@@ -1,8 +1,5 @@
 #light
 
-#r @"System.Core.dll"
-#r @"System.Data.Linq.dll"
-
 #nowarn "57"
 
 open Microsoft.FSharp.Quotations
@@ -663,22 +660,29 @@ module QuotationEvaluation =
             let env = Map.add v (vP |> asExpr) env 
             let tyargs = [| v.Type; body.Type |]
             let bodyP = ConvExpr env body
-            let convType = typedefof<System.Converter<obj,obj>>.MakeGenericType tyargs
+            let lambdaTy, tyargs =
+                if bodyP.Type = typeof<System.Void> then
+                    let tyargs = [| vP.Type |]
+                    typedefof<Action<_>>, tyargs
+                else
+                    let tyargs = [| vP.Type; bodyP.Type |]
+                    typedefof<Func<_, _>>, tyargs
+            let convType = lambdaTy.MakeGenericType tyargs
             let convDelegate = Expression.Lambda(convType, bodyP, [| vP |]) |> asExpr
-            Expression.Call(typeof<FuncConvert>,"ToFSharpFunc",tyargs,[| convDelegate |]) |> asExpr
-    
+            Expression.Call(typeof<FuncConvert>, "ToFSharpFunc", tyargs, [| convDelegate |]) |> asExpr
+
         | Patterns.WhileLoop(gd,b) -> 
             let gdP = ConvExpr env <@@ (fun () -> (%%gd:bool)) @@>
             let bP = ConvExpr env <@@ (fun () -> (%%b:unit)) @@>
             let minfo = WhileMethod.GetGenericMethodDefinition().MakeGenericMethod [| typeof<unit> |]
             Expression.Call(minfo,[| gdP; bP |]) |> asExpr
-        
+
         | Patterns.TryFinally(e,h) -> 
             let eP = ConvExpr env (Expr.Lambda(new Var("unitVar",typeof<unit>), e))
             let hP = ConvExpr env <@@ (fun () -> (%%h:unit)) @@>
             let minfo = TryFinallyMethod.GetGenericMethodDefinition().MakeGenericMethod [| e.Type |]
             Expression.Call(minfo,[| eP; hP |]) |> asExpr
-        
+
         | Patterns.TryWith(e,vf,filter,vh,handler) -> 
             let eP = ConvExpr env (Expr.Lambda(new Var("unitVar",typeof<unit>), e))
             let filterP = ConvExpr env (Expr.Lambda(vf,filter))
@@ -1189,35 +1193,35 @@ module EvaluationTests =
 
     module InlinedOperationsStillDynamicallyAvailableTests = 
 
-        checkEval "vroievr093" (<@ LanguagePrimitives.GenericZero<sbyte> @>)  0y
-        checkEval "vroievr091" (<@ LanguagePrimitives.GenericZero<int16> @>)  0s
-        checkEval "vroievr091" (<@ LanguagePrimitives.GenericZero<int32> @>)  0
-        checkEval "vroievr091" (<@ LanguagePrimitives.GenericZero<int64> @>)  0L
-        checkEval "vroievr091" (<@ LanguagePrimitives.GenericZero<nativeint> @>)  0n
-        checkEval "vroievr093" (<@ LanguagePrimitives.GenericZero<byte> @>)  0uy
-        checkEval "vroievr091" (<@ LanguagePrimitives.GenericZero<uint16> @>)  0us
-        checkEval "vroievr091" (<@ LanguagePrimitives.GenericZero<uint32> @>)  0u
-        checkEval "vroievr091" (<@ LanguagePrimitives.GenericZero<uint64> @>)  0UL
-        checkEval "vroievr091" (<@ LanguagePrimitives.GenericZero<unativeint> @>)  0un
-        checkEval "vroievr091" (<@ LanguagePrimitives.GenericZero<float> @>)  0.0
-        checkEval "vroievr091" (<@ LanguagePrimitives.GenericZero<float32> @>)  0.0f
-        checkEval "vroievr092" (<@ LanguagePrimitives.GenericZero<decimal> @>)  0M
+        checkEval "vroievr091a" (<@ LanguagePrimitives.GenericZero<char> @>)  '\000'
+        checkEval "vroievr091b" (<@ LanguagePrimitives.GenericZero<sbyte> @>)  0y
+        checkEval "vroievr091c" (<@ LanguagePrimitives.GenericZero<int16> @>)  0s
+        checkEval "vroievr091d" (<@ LanguagePrimitives.GenericZero<int32> @>)  0
+        checkEval "vroievr091e" (<@ LanguagePrimitives.GenericZero<int64> @>)  0L
+        checkEval "vroievr091f" (<@ LanguagePrimitives.GenericZero<nativeint> @>)  0n
+        checkEval "vroievr091g" (<@ LanguagePrimitives.GenericZero<byte> @>)  0uy
+        checkEval "vroievr091h" (<@ LanguagePrimitives.GenericZero<uint16> @>)  0us
+        checkEval "vroievr091i" (<@ LanguagePrimitives.GenericZero<uint32> @>)  0u
+        checkEval "vroievr091j" (<@ LanguagePrimitives.GenericZero<uint64> @>)  0UL
+        checkEval "vroievr091k" (<@ LanguagePrimitives.GenericZero<unativeint> @>)  0un
+        checkEval "vroievr091l" (<@ LanguagePrimitives.GenericZero<float> @>)  0.0
+        checkEval "vroievr091m" (<@ LanguagePrimitives.GenericZero<float32> @>)  0.0f
+        checkEval "vroievr091n" (<@ LanguagePrimitives.GenericZero<decimal> @>)  0M
 
-
-
-        checkEval "vroievr093" (<@ LanguagePrimitives.GenericOne<sbyte> @>)  1y
-        checkEval "vroievr191" (<@ LanguagePrimitives.GenericOne<int16> @>)  1s
-        checkEval "vroievr191" (<@ LanguagePrimitives.GenericOne<int32> @>)  1
-        checkEval "vroievr191" (<@ LanguagePrimitives.GenericOne<int64> @>)  1L
-        checkEval "vroievr191" (<@ LanguagePrimitives.GenericOne<nativeint> @>)  1n
-        checkEval "vroievr193" (<@ LanguagePrimitives.GenericOne<byte> @>)  1uy
-        checkEval "vroievr191" (<@ LanguagePrimitives.GenericOne<uint16> @>)  1us
-        checkEval "vroievr191" (<@ LanguagePrimitives.GenericOne<uint32> @>)  1u
-        checkEval "vroievr191" (<@ LanguagePrimitives.GenericOne<uint64> @>)  1UL
-        checkEval "vroievr191" (<@ LanguagePrimitives.GenericOne<unativeint> @>)  1un
-        checkEval "vroievr191" (<@ LanguagePrimitives.GenericOne<float> @>)  1.0
-        checkEval "vroievr191" (<@ LanguagePrimitives.GenericOne<float32> @>)  1.0f
-        checkEval "vroievr192" (<@ LanguagePrimitives.GenericOne<decimal> @>)  1M
+        checkEval "vroievr092a" (<@ LanguagePrimitives.GenericOne<char> @>)  '\001'
+        checkEval "vroievr092b" (<@ LanguagePrimitives.GenericOne<sbyte> @>)  1y
+        checkEval "vroievr092c" (<@ LanguagePrimitives.GenericOne<int16> @>)  1s
+        checkEval "vroievr092d" (<@ LanguagePrimitives.GenericOne<int32> @>)  1
+        checkEval "vroievr092e" (<@ LanguagePrimitives.GenericOne<int64> @>)  1L
+        checkEval "vroievr092f" (<@ LanguagePrimitives.GenericOne<nativeint> @>)  1n
+        checkEval "vroievr092g" (<@ LanguagePrimitives.GenericOne<byte> @>)  1uy
+        checkEval "vroievr092h" (<@ LanguagePrimitives.GenericOne<uint16> @>)  1us
+        checkEval "vroievr092i" (<@ LanguagePrimitives.GenericOne<uint32> @>)  1u
+        checkEval "vroievr092j" (<@ LanguagePrimitives.GenericOne<uint64> @>)  1UL
+        checkEval "vroievr092k" (<@ LanguagePrimitives.GenericOne<unativeint> @>)  1un
+        checkEval "vroievr092l" (<@ LanguagePrimitives.GenericOne<float> @>)  1.0
+        checkEval "vroievr092m" (<@ LanguagePrimitives.GenericOne<float32> @>)  1.0f
+        checkEval "vroievr092n" (<@ LanguagePrimitives.GenericOne<decimal> @>)  1M
 
         check "vroievr0971" (LanguagePrimitives.AdditionDynamic 3y 4y) 7y
         check "vroievr0972" (LanguagePrimitives.AdditionDynamic 3s 4s) 7s

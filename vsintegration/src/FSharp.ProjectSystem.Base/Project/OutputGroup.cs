@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
@@ -113,7 +113,7 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
             var result = new BuildResult(MSBuildResult.Failed, null);
             if (project.ProjectMgr.BuildProject.Targets.ContainsKey(ProjectFileConstants.AllProjectOutputGroups))
             {
-                result = project.InvokeMsBuild(ProjectFileConstants.AllProjectOutputGroups, false /*isBeingCalledByComputeSourcesAndFlags*/);
+                result = project.InvokeMsBuild(ProjectFileConstants.AllProjectOutputGroups);
                 if (!result.IsSuccessful)
                 {
                     // we could not compute it, probably because there is a real build going on right now

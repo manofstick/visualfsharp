@@ -1,6 +1,6 @@
-// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
-using FSLib = Microsoft.FSharp.Compiler.AbstractIL.Internal.Library;
+using FSLib = FSharp.Compiler.AbstractIL.Internal.Library;
 using System;
 using System.Runtime.InteropServices;
 using System.Collections;
@@ -92,6 +92,7 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
                 return caption;
             }
         }
+
         public override int ImageIndex
         {
             get
@@ -208,6 +209,14 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
                 this.HasDesigner = true;
             } 
         } 
+
+        public virtual string RelativeFilePath
+        {
+            get
+            {
+                return PackageUtilities.MakeRelativeIfRooted(this.Url, this.ProjectMgr.BaseURI);
+            }
+        }
 
         public override NodeProperties CreatePropertiesObject()
         {
@@ -339,7 +348,9 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
         {
             Guid emptyGuid = Guid.Empty;
             int result = 0;
+#pragma warning disable VSTHRD001 // Avoid legacy thread switching APIs
             ThreadHelper.Generic.Invoke(() =>
+#pragma warning restore VSTHRD001 // Avoid legacy thread switching APIs
             {
                 ErrorHandler.ThrowOnFailure(uiShell.ShowMessageBox(0u, ref emptyGuid, title, message, null, 0u, OLEMSGBUTTON.OLEMSGBUTTON_YESNO, OLEMSGDEFBUTTON.OLEMSGDEFBUTTON_FIRST, icon, 0, out result));
             });
@@ -466,16 +477,16 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
                 switch ((VsCommands)cmd)
                 {
                     case VsCommands.ViewCode:
-                        return ((FileDocumentManager)this.GetDocumentManager()).Open(false, false, VSConstants.LOGVIEWID_Code, VSConstants.LOGVIEWID_Code, out windowFrame, WindowFrameShowAction.Show);
+                        return ((FileDocumentManager)this.GetDocumentManager()).Open(false, false, VSConstants.LOGVIEWID_Code, out windowFrame, WindowFrameShowAction.Show);
 
                     case VsCommands.ViewForm:
-                        return ((FileDocumentManager)this.GetDocumentManager()).Open(false, false, VSConstants.LOGVIEWID_Designer, VSConstants.LOGVIEWID_Designer, out windowFrame, WindowFrameShowAction.Show);
+                        return ((FileDocumentManager)this.GetDocumentManager()).Open(false, false, VSConstants.LOGVIEWID_Designer, out windowFrame, WindowFrameShowAction.Show);
 
                     case VsCommands.Open:
                         return ((FileDocumentManager)this.GetDocumentManager()).Open(false, false, WindowFrameShowAction.Show);
 
                     case VsCommands.OpenWith:
-                        return ((FileDocumentManager)this.GetDocumentManager()).Open(false, true, VSConstants.LOGVIEWID_UserChooseView, VSConstants.LOGVIEWID_UserChooseView, out windowFrame, WindowFrameShowAction.Show);
+                        return ((FileDocumentManager)this.GetDocumentManager()).Open(false, true, VSConstants.LOGVIEWID_UserChooseView, out windowFrame, WindowFrameShowAction.Show);
                 }
             }
 
@@ -1070,5 +1081,10 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
             }
             return childNodes;
         }
+
+        public override __VSPROVISIONALVIEWINGSTATUS ProvisionalViewingStatus =>
+             IsFileOnDisk(false)
+                ? __VSPROVISIONALVIEWINGSTATUS.PVS_Enabled
+                : __VSPROVISIONALVIEWINGSTATUS.PVS_Disabled;
     }
 }

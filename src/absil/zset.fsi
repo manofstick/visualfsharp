@@ -1,10 +1,10 @@
-// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
-namespace Microsoft.FSharp.Compiler.AbstractIL.Internal
+namespace FSharp.Compiler.AbstractIL.Internal
 
 open Internal.Utilities
-open Microsoft.FSharp.Compiler.AbstractIL 
-open Microsoft.FSharp.Compiler.AbstractIL.Internal.Library 
+open FSharp.Compiler.AbstractIL 
+open FSharp.Compiler.AbstractIL.Internal.Library 
 open System.Collections.Generic
 
 /// Sets with a specific comparison function
@@ -20,7 +20,6 @@ module internal Zset =
     val memberOf  : Zset<'T> -> 'T -> bool
     val add       : 'T -> Zset<'T> -> Zset<'T>
     val addList   : 'T list -> Zset<'T> -> Zset<'T>
-    val addFlatList : FlatList<'T> -> Zset<'T> -> Zset<'T>
     val singleton : IComparer<'T> -> 'T -> Zset<'T>
     val remove    : 'T -> Zset<'T> -> Zset<'T>
 

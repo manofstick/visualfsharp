@@ -1,4 +1,5 @@
-// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
+extern alias Shell14;
 
 using System;
 using System.Collections.Generic;
@@ -20,6 +21,7 @@ using Microsoft.VisualStudio.OLE.Interop;
 using Microsoft.VisualStudio.Shell.Interop;
 using Microsoft.VisualStudio.Designer.Interfaces;
 using Microsoft.VisualStudio.Shell;
+using Microsoft.VisualStudio.PlatformUI;
 using Microsoft.Win32;
 using IOleServiceProvider = Microsoft.VisualStudio.OLE.Interop.IServiceProvider;
 using IServiceProvider = System.IServiceProvider;
@@ -33,6 +35,45 @@ using System.Runtime.Versioning;
 
 namespace Microsoft.VisualStudio.FSharp.ProjectSystem
 {
+    /// <summary>
+    ///  helper class to check the status of the solution pane
+    ///  this is a workaround needed because F# cannot reference and use two versions of an
+    ///  assembly (Microsoft.VisualStudio.Shell.14 & 15 in this case)
+    /// </summary>
+    static class SolutionPaneUtil
+    {   /// uses the serviceProvider and guid to identify a node in the solution pane and check if it
+        /// is currently in rename mode or not. If it is return the pivotTreeView 
+        public static HierarchyNode TryRenameAndReturnNode ( ProjectNode root, Guid solutionHierarchyNode, UInt32 id,Func<string> getEditLabel )
+        {
+            var window = UIHierarchyUtilities.GetUIHierarchyWindow ( root.Site, solutionHierarchyNode );
+            if ( window is SolutionNavigatorPane )
+            {
+                var snp = (SolutionNavigatorPane) window;
+                var tree = snp?.Navigator?.TreeView;
+                if ( tree != null && tree.IsInRenameMode )
+                {
+                    var oldName = getEditLabel();
+                    // if tree is in rename mode now - commit renaming
+                    // since rename is implemented via remove\add set of operations - after renaming we need to fetch node that corresponds to the current one
+
+                    // rename may fail (i.e if new name contains invalid characters), in this case user will see error message and after that failure will be swallowed
+                    // if this happens - we need to cancel current transaction,
+                    // otherwise it will hold current hierarchy node. After move operation is completed - current node will become invalid => may lead to ObjectDisposedExceptions.
+                    // Since error is not appear directly in the code - we check if old and new labels match and if yes - treat it as reason that error happens
+                    tree.CommitRename ( Shell14::Microsoft.Internal.VisualStudio.PlatformUI.RenameItemCompletionFocusBehavior.Refocus );
+                    var node = root.ItemIdMap[id];
+                    if (node != null && node.GetEditLabel() == oldName )
+                    {
+                        tree.CancelRename ( Shell14::Microsoft.Internal.VisualStudio.PlatformUI.RenameItemCompletionFocusBehavior.Refocus );
+                    }
+                    return node;
+                }
+            }
+            return null;
+        }
+    }
+
+
     internal class FSharpCoreVersion
     {
         public string Version { get; private set; }
@@ -678,7 +719,7 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
         /// <param name="buildEngine">The build engine to use to create a build project.</param>
         /// <param name="fullProjectPath">The full path of the project.</param>
         /// <returns>A loaded msbuild project.</returns>
-        public static Microsoft.Build.Evaluation.Project InitializeMsBuildProject(Microsoft.Build.Evaluation.ProjectCollection buildEngine, string fullProjectPath)
+        public static Microsoft.Build.Evaluation.Project InitializeMsBuildProject(Microsoft.Build.Evaluation.ProjectCollection buildEngine, string fullProjectPath, IDictionary<String,String> globalProperties)
         {
             if (buildEngine == null)
             {
@@ -697,7 +738,11 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
 
             if (buildProject == null)
             {
-                buildProject = buildEngine.LoadProject(fullProjectPath);
+                var lclGlobalProperties = (null == globalProperties) ? new Dictionary<string, string>() : new Dictionary<string, string>(globalProperties)
+                {
+                    { "FSharpCompilerPath", Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) }
+                };
+                buildProject = buildEngine.LoadProject(fullProjectPath, lclGlobalProperties, null);
                 buildProject.IsBuildEnabled = true;
             }
 
@@ -711,7 +756,7 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
         /// <param name="fullProjectPath">The full path of the project.</param>
         /// <param name="exitingBuildProject">An Existing build project that will be reloaded.</param>
         /// <returns>A loaded msbuild project.</returns>
-        public static Microsoft.Build.Evaluation.Project ReinitializeMsBuildProject(Microsoft.Build.Evaluation.ProjectCollection buildEngine, string fullProjectPath, Microsoft.Build.Evaluation.Project exitingBuildProject)
+        public static Microsoft.Build.Evaluation.Project ReinitializeMsBuildProject(Microsoft.Build.Evaluation.ProjectCollection buildEngine, string fullProjectPath, IDictionary<String,String> globalProperties, Microsoft.Build.Evaluation.Project exitingBuildProject)
         {
             // If we have a build project that has been loaded with another file unload it.
             try
@@ -727,7 +772,7 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
             {
             }
 
-            return Utilities.InitializeMsBuildProject(buildEngine, fullProjectPath);
+            return Utilities.InitializeMsBuildProject(buildEngine, fullProjectPath, globalProperties);
         }
 
         public static Microsoft.Build.Evaluation.ProjectCollection InitializeMsBuildEngine(Microsoft.Build.Evaluation.ProjectCollection existingEngine)
@@ -808,7 +853,7 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
             {
                 extension = Path.GetExtension(filePart);
             }
-            // We catch the ArgumentException because we want this method to return true if the filename is not valid. FilePart could be for example #¤&%"¤&"% and that would throw ArgumentException on GetExtension
+            // We catch the ArgumentException because we want this method to return true if the filename is not valid. FilePart could be for example #ï¿½&%"ï¿½&"% and that would throw ArgumentException on GetExtension
             catch (ArgumentException)
             {
                 return true;
@@ -955,6 +1000,30 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
 
             return true;
         }
+
+        /// <summary>
+        /// Retrives the configuration and the platform using the IVsSolutionBuildManager2 interface.
+        /// </summary>
+        /// <param name="serviceProvider">A service provider.</param>
+        /// <param name="hierarchy">The hierrachy whose configuration is requested.</param>
+        /// <returns>true if successfull.</returns>
+        public static bool TryGetConfigurationAndPlatform(IVsCfg config, out ConfigCanonicalName configCanonicalName)
+        {
+
+            string configName = null;
+            config.get_DisplayName(out configName);
+
+            if (configName == null)
+            {
+                configCanonicalName = new ConfigCanonicalName();
+                return false;
+            }
+
+            configCanonicalName = new ConfigCanonicalName(configName);
+
+            return true;
+        }
+
 
         /// <summary>
         /// Determines whether the shell is in command line mode.

@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
 /// <summary>This namespace contains constructs for reflecting on the representation of
 /// F# values and types. It augments the design of System.Reflection.</summary>
@@ -29,13 +29,9 @@ type UnionCaseInfo =
     /// <returns>An array of custom attributes.</returns>
     member GetCustomAttributes: attributeType:System.Type -> obj[]
 
-#if FX_NO_CUSTOMATTRIBUTEDATA
-#else
     /// <summary>Returns the custom attributes data associated with the case.</summary>
     /// <returns>An list of custom attribute data items.</returns>
     member GetCustomAttributesData: unit -> System.Collections.Generic.IList<CustomAttributeData>
-
-#endif
 
     /// <summary>The fields associated with the case, represented by a PropertyInfo.</summary>
     /// <returns>The fields associated with the case.</returns>
@@ -71,8 +67,6 @@ type FSharpValue =
     /// <returns>A function to read the specified field from the record.</returns>
     static member PreComputeRecordFieldReader : info:PropertyInfo -> (obj -> obj)
 
-#if FX_RESHAPED_REFLECTION
-#else
     /// <summary>Creates an instance of a record type.</summary>
     ///
     /// <remarks>Assumes the given input is a record type.</remarks>
@@ -189,7 +183,6 @@ type FSharpValue =
     /// <exception cref="System.ArgumentException">Thrown when the input type is not an F# exception.</exception>
     /// <returns>The fields from the given exception.</returns>
     static member GetExceptionFields:  exn:obj * ?bindingFlags:BindingFlags  -> obj[]
-#endif
 
     /// <summary>Creates an instance of a tuple type</summary>
     ///
@@ -264,8 +257,6 @@ type FSharpValue =
 /// <summary>Contains operations associated with constructing and analyzing F# types such as records, unions and tuples</summary>
 type FSharpType =
 
-#if FX_RESHAPED_REFLECTION
-#else
     /// <summary>Reads all the fields from a record value, in declaration order</summary>
     ///
     /// <remarks>Assumes the given input is a record value. If not, ArgumentException is raised.</remarks>
@@ -311,8 +302,6 @@ type FSharpType =
     /// <returns>True if the type check is an F# exception.</returns>
     static member IsExceptionRepresentation: exceptionType:Type * ?bindingFlags:BindingFlags -> bool
 
-#endif
-
     /// <summary>Returns a <c>System.Type</c> representing the F# function type with the given domain and range</summary>
     /// <param name="domain">The input type of the function.</param>
     /// <param name="range">The output type of the function.</param>
@@ -325,11 +314,13 @@ type FSharpType =
     static member MakeTupleType: types:Type[] -> Type
 
     /// <summary>Returns a <c>System.Type</c> representing an F# tuple type with the given element types</summary>
+    /// <param name="asm">Runtime assembly containing System.Tuple definitions.</param>
     /// <param name="types">An array of types for the tuple elements.</param>
     /// <returns>The type representing the tuple containing the input elements.</returns>
     static member MakeTupleType: asm:Assembly * types:Type[] -> Type
 
     /// <summary>Returns a <c>System.Type</c> representing an F# struct tuple type with the given element types</summary>
+    /// <param name="asm">Runtime assembly containing System.ValueTuple definitions.</param>
     /// <param name="types">An array of types for the tuple elements.</param>
     /// <returns>The type representing the struct tuple containing the input elements.</returns>
     static member MakeStructTupleType: asm:Assembly * types:Type[] -> Type
@@ -531,9 +522,5 @@ namespace Microsoft.FSharp.Reflection
 open Microsoft.FSharp.Core
 
 module internal ReflectionUtils = 
-#if FX_RESHAPED_REFLECTION
-    type internal BindingFlags = ReflectionAdapters.BindingFlags
-#else
     type BindingFlags = System.Reflection.BindingFlags
-#endif
     val toBindingFlags  : allowAccessToNonPublicMembers : bool -> BindingFlags

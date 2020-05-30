@@ -1,10 +1,8 @@
-// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
 /// <summary>Types and functions related to expression quotations</summary>
 namespace Microsoft.FSharp.Quotations
 
-#if FX_MINIMAL_REFLECTION // not on Compact Framework 
-#else
 open Microsoft.FSharp.Core
 open Microsoft.FSharp.Collections
 open Microsoft.FSharp.Reflection
@@ -183,6 +181,12 @@ type Expr =
     /// <returns>The resulting expression.</returns>
     static member NewTuple: elements:Expr list -> Expr 
 
+    /// <summary>Builds an expression that represents the creation of an F# tuple value</summary>
+    /// <param name="asm">Runtime assembly containing System.ValueTuple definitions.</param>
+    /// <param name="elements">The list of elements of the tuple.</param>
+    /// <returns>The resulting expression.</returns>
+    static member NewStructTuple: asm:Assembly * elements:Expr list -> Expr 
+
     /// <summary>Builds record-construction expressions </summary>
     /// <param name="recordType">The type of record.</param>
     /// <param name="elements">The list of elements of the record.</param>
@@ -329,8 +333,6 @@ type Expr =
     /// <param name="definition">The definition of the value being quoted.</param>
     /// <returns>The resulting expression.</returns>
     static member WithValue: value: obj * expressionType:Type * definition: Expr -> Expr
-
-
 
     /// <summary>Builds an expression that represents a variable</summary>
     /// <param name="variable">The input variable.</param>
@@ -547,6 +549,12 @@ module Patterns =
     [<CompiledName("NewTuplePattern")>]
     val (|NewTuple|_|)        : input:Expr -> (Expr list) option
 
+    /// <summary>An active pattern to recognize expressions that represent construction of struct tuple values</summary>
+    /// <param name="input">The input expression to match against.</param>
+    /// <returns>(Expr list) option</returns>
+    [<CompiledName("NewStructTuplePattern")>]
+    val (|NewStructTuple|_|)        : input:Expr -> (Expr list) option
+
     /// <summary>An active pattern to recognize expressions that represent the read of a static or instance property, or a non-function value declared in a module</summary>
     /// <param name="input">The input expression to match against.</param>
     /// <returns>(Expr option * PropertyInfo * Expr list) option</returns>
@@ -643,7 +651,6 @@ module Patterns =
     /// <returns>(Var * Expr) option</returns>
     [<CompiledName("VarSetPattern")>]
     val (|VarSet|_|)          : input:Expr -> (Var * Expr) option
-    
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 /// <summary>Contains a set of derived F# active patterns to analyze F# expression objects</summary>
@@ -811,5 +818,3 @@ module ExprShape =
     /// <param name="arguments">The list of arguments.</param>
     /// <returns>The rebuilt expression.</returns>
     val RebuildShapeCombination  : shape:obj * arguments:list<Expr> -> Expr
-
-#endif

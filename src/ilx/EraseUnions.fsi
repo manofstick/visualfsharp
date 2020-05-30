@@ -1,13 +1,13 @@
-// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
 // -------------------------------------------------------------------- 
 // Compiler use only.  Erase discriminated unions.
 // -------------------------------------------------------------------- 
 
-module internal Microsoft.FSharp.Compiler.AbstractIL.Extensions.ILX.EraseUnions
+module internal FSharp.Compiler.AbstractIL.Extensions.ILX.EraseUnions
 
-open Microsoft.FSharp.Compiler.AbstractIL.IL
-open Microsoft.FSharp.Compiler.AbstractIL.Extensions.ILX.Types
+open FSharp.Compiler.AbstractIL.IL
+open FSharp.Compiler.AbstractIL.Extensions.ILX.Types
 
 /// Make the instruction sequence for a "newdata" operation
 val mkNewData : ILGlobals -> IlxUnionSpec * int -> ILInstr list
@@ -28,7 +28,7 @@ val mkStData : IlxUnionSpec * int * int -> ILInstr list
 val mkBrIsData : ILGlobals -> sense: bool -> avoidHelpers:bool * IlxUnionSpec * int * ILCodeLabel -> ILInstr list
 
 /// Make the type definition for a union type
-val mkClassUnionDef : ILGlobals -> ILTypeRef -> ILTypeDef -> IlxUnionInfo -> ILTypeDef
+val mkClassUnionDef : addMethodGeneratedAttrs:(ILMethodDef -> ILMethodDef) * addPropertyGeneratedAttrs:(ILPropertyDef -> ILPropertyDef) * addPropertyNeverAttrs:(ILPropertyDef -> ILPropertyDef) * addFieldGeneratedAttrs:(ILFieldDef -> ILFieldDef) * addFieldNeverAttrs:(ILFieldDef -> ILFieldDef) * mkDebuggerTypeProxyAttribute:(ILType -> ILAttribute) -> ilg:ILGlobals -> tref:ILTypeRef -> td:ILTypeDef -> cud:IlxUnionInfo -> ILTypeDef    
 
 /// Make the IL type for a union type alternative
 val GetILTypeForAlternative : IlxUnionSpec -> int -> ILType
@@ -41,6 +41,7 @@ type ICodeGen<'Mark> =
     abstract SetMarkToHere: 'Mark  -> unit
     abstract EmitInstr : ILInstr -> unit
     abstract EmitInstrs : ILInstr list -> unit
+    abstract MkInvalidCastExnNewobj : unit -> ILInstr
 
 /// Emit the instruction sequence for a "castdata" operation
 val emitCastData : ILGlobals -> ICodeGen<'Mark> -> canfail: bool * avoidHelpers:bool * IlxUnionSpec * int -> unit

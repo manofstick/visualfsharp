@@ -1,19 +1,51 @@
-﻿module internal FSharp.Compiler.Service.Tests.Common
+[<AutoOpen>]
+module internal FSharp.Compiler.Service.Tests.Common
 
+open System
 open System.IO
 open System.Collections.Generic
-open Microsoft.FSharp.Compiler
-open Microsoft.FSharp.Compiler.SourceCodeServices
+open FSharp.Compiler
+open FSharp.Compiler.Range
+open FSharp.Compiler.SourceCodeServices
+open FSharp.Compiler.SyntaxTree
+open FsUnit
+open NUnit.Framework
 
-// Create one global interactive checker instance 
+#if NETCOREAPP
+let readRefs (folder : string) (projectFile: string) =
+    let runProcess (workingDir: string) (exePath: string) (args: string) =
+        let psi = System.Diagnostics.ProcessStartInfo()
+        psi.FileName <- exePath
+        psi.WorkingDirectory <- workingDir
+        psi.RedirectStandardOutput <- false
+        psi.RedirectStandardError <- false
+        psi.Arguments <- args
+        psi.CreateNoWindow <- true
+        psi.UseShellExecute <- false
+
+        use p = new System.Diagnostics.Process()
+        p.StartInfo <- psi
+        p.Start() |> ignore
+        p.WaitForExit()
+
+        let exitCode = p.ExitCode
+        exitCode, ()
+
+    let projFilePath = Path.Combine(folder, projectFile)
+    let runCmd exePath args = runProcess folder exePath (args |> String.concat " ")
+    let msbuildExec = Dotnet.ProjInfo.Inspect.dotnetMsbuild runCmd
+    let result = Dotnet.ProjInfo.Inspect.getProjectInfo ignore msbuildExec Dotnet.ProjInfo.Inspect.getFscArgs [] projFilePath
+    match result with
+    | Ok(Dotnet.ProjInfo.Inspect.GetResult.FscArgs x) ->
+        x
+        |> List.filter (fun s -> s.StartsWith("-r:", StringComparison.Ordinal))
+        |> List.map (fun s -> s.Replace("-r:", ""))
+    | _ -> []
+#endif
+
+
+// Create one global interactive checker instance
 let checker = FSharpChecker.Create()
-
-let parseAndCheckScript (file, input) = 
-    let checkOptions = checker.GetProjectOptionsFromScript(file, input) |> Async.RunSynchronously
-    let parseResult, typedRes = checker.ParseAndCheckFileInProject(file, 0, input, checkOptions) |> Async.RunSynchronously
-    match typedRes with
-    | FSharpCheckFileAnswer.Succeeded(res) -> parseResult, res
-    | res -> failwithf "Parsing did not finish... (%A)" res
 
 type TempFile(ext, contents) = 
     let tmpFile =  Path.ChangeExtension(System.IO.Path.GetTempFileName() , ext)
@@ -26,43 +58,56 @@ type TempFile(ext, contents) =
 
 let getBackgroundParseResultsForScriptText (input) = 
     use file =  new TempFile("fsx", input)
-    let checkOptions = checker.GetProjectOptionsFromScript(file.Name, input) |> Async.RunSynchronously
+    let checkOptions, _diagnostics = checker.GetProjectOptionsFromScript(file.Name, FSharp.Compiler.Text.SourceText.ofString input) |> Async.RunSynchronously
     checker.GetBackgroundParseResultsForFileInProject(file.Name, checkOptions)  |> Async.RunSynchronously
 
 
 let getBackgroundCheckResultsForScriptText (input) = 
     use file =  new TempFile("fsx", input)
-    let checkOptions = checker.GetProjectOptionsFromScript(file.Name, input) |> Async.RunSynchronously
+    let checkOptions, _diagnostics = checker.GetProjectOptionsFromScript(file.Name, FSharp.Compiler.Text.SourceText.ofString input) |> Async.RunSynchronously
     checker.GetBackgroundCheckResultsForFileInProject(file.Name, checkOptions) |> Async.RunSynchronously
 
 
 let sysLib nm = 
+#if !NETCOREAPP
     if System.Environment.OSVersion.Platform = System.PlatformID.Win32NT then // file references only valid on Windows 
-        @"C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.6.1\" + nm + ".dll"
+        let programFilesx86Folder = System.Environment.GetEnvironmentVariable("PROGRAMFILES(X86)")
+        programFilesx86Folder + @"\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.7.2\" + nm + ".dll"
     else
-        let sysDir = System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory()
+#endif
+        let sysDir = System.AppContext.BaseDirectory
         let (++) a b = System.IO.Path.Combine(a,b)
         sysDir ++ nm + ".dll" 
 
 [<AutoOpen>]
 module Helpers = 
-    open System
     type DummyType = A | B
-    let PathRelativeToTestAssembly p = Path.Combine(Path.GetDirectoryName(Uri(typeof<DummyType>.Assembly.CodeBase).LocalPath), p)
+    let PathRelativeToTestAssembly p = Path.Combine(Path.GetDirectoryName(Uri(typeof<FSharp.Compiler.SourceCodeServices.FSharpChecker>.Assembly.CodeBase).LocalPath), p)
 
 let fsCoreDefaultReference() = 
     PathRelativeToTestAssembly "FSharp.Core.dll"
-    // if System.Environment.OSVersion.Platform = System.PlatformID.Win32NT then // file references only valid on Windows 
-    //    @"C:\Program Files (x86)\Reference Assemblies\Microsoft\FSharp\.NETFramework\v4.0\4.3.0.0\FSharp.Core.dll"  
-    //else 
-    //    sysLib "FSharp.Core"
 
+let mkStandardProjectReferences () = 
+#if NETCOREAPP
+            let file = "Sample_NETCoreSDK_FSharp_Library_netstandard2_0.fsproj"
+            let projDir = Path.Combine(__SOURCE_DIRECTORY__, "../projects/Sample_NETCoreSDK_FSharp_Library_netstandard2_0")
+            readRefs projDir file
+#else
+            [ yield sysLib "mscorlib"
+              yield sysLib "System"
+              yield sysLib "System.Core"
+              yield fsCoreDefaultReference() ]
+#endif              
 
-let mkProjectCommandLineArgs (dllName, fileNames) = 
+let mkProjectCommandLineArgsSilent (dllName, fileNames) = 
+  let args = 
     [|  yield "--simpleresolution" 
         yield "--noframework" 
         yield "--debug:full" 
         yield "--define:DEBUG" 
+#if NETCOREAPP
+        yield "--targetprofile:netcore" 
+#endif
         yield "--optimize-" 
         yield "--out:" + dllName
         yield "--doc:test.xml" 
@@ -72,13 +117,94 @@ let mkProjectCommandLineArgs (dllName, fileNames) =
         yield "--target:library" 
         for x in fileNames do 
             yield x
-        let references = 
-            [ yield sysLib "mscorlib"
-              yield sysLib "System"
-              yield sysLib "System.Core"
-              yield fsCoreDefaultReference() ]
+        let references = mkStandardProjectReferences ()
         for r in references do
-                yield "-r:" + r |]
+            yield "-r:" + r
+     |]
+  args
+
+let mkProjectCommandLineArgs (dllName, fileNames) = 
+  let args = mkProjectCommandLineArgsSilent (dllName, fileNames)
+  printfn "dllName = %A, args = %A" dllName args
+  args
+
+#if NETCOREAPP
+let mkProjectCommandLineArgsForScript (dllName, fileNames) = 
+    [|  yield "--simpleresolution" 
+        yield "--noframework" 
+        yield "--debug:full" 
+        yield "--define:DEBUG" 
+        yield "--targetprofile:netcore" 
+        yield "--optimize-" 
+        yield "--out:" + dllName
+        yield "--doc:test.xml" 
+        yield "--warn:3" 
+        yield "--fullpaths" 
+        yield "--flaterrors" 
+        yield "--target:library" 
+        for x in fileNames do 
+            yield x
+        let references = mkStandardProjectReferences ()
+        for r in references do
+            yield "-r:" + r
+     |]
+#endif
+
+let mkTestFileAndOptions source additionalArgs =
+    let fileName = Path.ChangeExtension(Path.GetTempFileName(), ".fs")
+    let project = Path.GetTempFileName()
+    let dllName = Path.ChangeExtension(project, ".dll")
+    let projFileName = Path.ChangeExtension(project, ".fsproj")
+    let fileSource1 = "module M"
+    File.WriteAllText(fileName, fileSource1)
+
+    let args = Array.append (mkProjectCommandLineArgs (dllName, [fileName])) additionalArgs
+    let options = checker.GetProjectOptionsFromCommandLineArgs (projFileName, args)
+    fileName, options
+
+let parseAndCheckFile fileName source options =
+    match checker.ParseAndCheckFileInProject(fileName, 0, FSharp.Compiler.Text.SourceText.ofString source, options) |> Async.RunSynchronously with
+    | parseResults, FSharpCheckFileAnswer.Succeeded(checkResults) -> parseResults, checkResults
+    | _ -> failwithf "Parsing aborted unexpectedly..."
+
+let parseAndCheckScript (file, input) = 
+
+#if NETCOREAPP
+    let dllName = Path.ChangeExtension(file, ".dll")
+    let projName = Path.ChangeExtension(file, ".fsproj")
+    let args = mkProjectCommandLineArgsForScript (dllName, [file])
+    printfn "file = %A, args = %A" file args
+    let projectOptions = checker.GetProjectOptionsFromCommandLineArgs (projName, args)
+
+#else    
+    let projectOptions, _diagnostics = checker.GetProjectOptionsFromScript(file, FSharp.Compiler.Text.SourceText.ofString input) |> Async.RunSynchronously
+    printfn "projectOptions = %A" projectOptions
+#endif
+
+    let parseResult, typedRes = checker.ParseAndCheckFileInProject(file, 0, FSharp.Compiler.Text.SourceText.ofString input, projectOptions) |> Async.RunSynchronously
+    
+    // if parseResult.Errors.Length > 0 then
+    //     printfn "---> Parse Input = %A" input
+    //     printfn "---> Parse Error = %A" parseResult.Errors
+
+    match typedRes with
+    | FSharpCheckFileAnswer.Succeeded(res) -> parseResult, res
+    | res -> failwithf "Parsing did not finish... (%A)" res
+
+let parseSourceCode (name: string, code: string) =
+    let location = Path.Combine(Path.GetTempPath(),"test"+string(hash (name, code)))
+    try Directory.CreateDirectory(location) |> ignore with _ -> ()
+    let filePath = Path.Combine(location, name + ".fs")
+    let dllPath = Path.Combine(location, name + ".dll")
+    let args = mkProjectCommandLineArgs(dllPath, [filePath])
+    let options, errors = checker.GetParsingOptionsFromCommandLineArgs(List.ofArray args)
+    let parseResults = checker.ParseFile(filePath, FSharp.Compiler.Text.SourceText.ofString code, options) |> Async.RunSynchronously
+    parseResults.ParseTree
+
+let parseSourceCodeAndGetModule (source: string) =
+    match parseSourceCode ("test", source) with
+    | Some (ParsedInput.ImplFile (ParsedImplFileInput (_, _, _, _, _, [ moduleOrNamespace ], _))) -> moduleOrNamespace
+    | _ -> failwith "Could not get module decls"
 
 /// Extract range info 
 let tups (m:Range.range) = (m.StartLine, m.StartColumn), (m.EndLine, m.EndColumn)
@@ -104,6 +230,9 @@ let attribsOfSymbol (s:FSharpSymbol) =
             if v.IsVolatile then yield "volatile"
             if v.IsStatic then yield "static"
             if v.IsLiteral then yield sprintf "%A" v.LiteralValue.Value
+            if v.IsAnonRecordField then 
+                let info, tys, i = v.AnonRecordFieldDetails
+                yield "anon(" + string i + ", [" + info.Assembly.QualifiedName + "/" + String.concat "+" info.EnclosingCompiledTypeNames + "/" + info.CompiledName + "]" + String.concat "," info.SortedFieldNames + ")"
 
 
         | :? FSharpEntity as v -> 
@@ -120,10 +249,12 @@ let attribsOfSymbol (s:FSharpSymbol) =
             if v.IsFSharpUnion then yield "union"
             if v.IsInterface then yield "interface"
             if v.IsMeasure then yield "measure"
+#if !NO_EXTENSIONTYPING
             if v.IsProvided then yield "provided"
             if v.IsStaticInstantiation then yield "staticinst"
             if v.IsProvidedAndErased then yield "erased"
             if v.IsProvidedAndGenerated then yield "generated"
+#endif
             if v.IsUnresolved then yield "unresolved"
             if v.IsValueType then yield "valuetype"
 
@@ -174,5 +305,73 @@ let rec allSymbolsInEntities compGen (entities: IList<FSharpEntity>) =
                  yield (x :> FSharpSymbol)
           yield! allSymbolsInEntities compGen e.NestedEntities ]
 
+let getParseAndCheckResults (source: string) =
+    parseAndCheckScript("/home/user/Test.fsx", source)
 
+let inline dumpErrors results =
+    (^TResults: (member Errors: FSharpErrorInfo[]) results)
+    |> Array.map (fun e ->
+        let message =
+            e.Message.Split('\n')
+            |> Array.map (fun s -> s.Trim())
+            |> String.concat " "
+        sprintf "%s: %s" (e.Range.ToShortString()) message)
+    |> List.ofArray
+
+
+let getSymbolUses (results: FSharpCheckFileResults) =
+    results.GetAllUsesOfAllSymbolsInFile() |> Async.RunSynchronously
+
+let getSymbolUsesFromSource (source: string) =
+    let _, typeCheckResults = getParseAndCheckResults source 
+    typeCheckResults.GetAllUsesOfAllSymbolsInFile() |> Async.RunSynchronously
+
+let getSymbols (symbolUses: FSharpSymbolUse[]) =
+    symbolUses |> Array.map (fun symbolUse -> symbolUse.Symbol)
+
+
+let getSymbolName (symbol: FSharpSymbol) =
+    match symbol with
+    | :? FSharpMemberOrFunctionOrValue as mfv -> Some mfv.LogicalName
+    | :? FSharpEntity as entity -> Some entity.LogicalName
+    | :? FSharpGenericParameter as parameter -> Some parameter.Name
+    | :? FSharpParameter as parameter -> parameter.Name
+    | :? FSharpStaticParameter as parameter -> Some parameter.Name
+    | :? FSharpActivePatternCase as case -> Some case.Name
+    | :? FSharpUnionCase as case -> Some case.Name
+    | _ -> None
+
+
+let assertContainsSymbolWithName name source =
+    getSymbols source
+    |> Array.choose getSymbolName
+    |> Array.contains name
+    |> shouldEqual true
+
+let assertContainsSymbolsWithNames (names: string list) source =
+    let symbolNames =
+        getSymbols source
+        |> Array.choose getSymbolName
+
+    for name in names do
+        symbolNames
+        |> Array.contains name
+        |> shouldEqual true
+
+let assertHasSymbolUsages (names: string list) (results: FSharpCheckFileResults) =
+    let symbolNames =
+        getSymbolUses results
+        |> getSymbols
+        |> Array.choose getSymbolName
+        |> set
+
+    for name in names do
+        Assert.That(Set.contains name symbolNames, name)
+
+let coreLibAssemblyName =
+#if NETCOREAPP
+    "System.Runtime"
+#else
+    "mscorlib"
+#endif
 

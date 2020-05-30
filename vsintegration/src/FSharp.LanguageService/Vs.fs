@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
 namespace Microsoft.VisualStudio.FSharp.LanguageService
 
@@ -8,12 +8,13 @@ open System.Collections
 open System.Collections.Generic
 open System.Reflection
 open Microsoft.VisualStudio
+open Microsoft.VisualStudio.Editor
 open Microsoft.VisualStudio.Shell
 open Microsoft.VisualStudio.Shell.Interop
 open Microsoft.VisualStudio.Text
 open Microsoft.VisualStudio.TextManager.Interop
 open Microsoft.VisualStudio.OLE.Interop
-open Microsoft.FSharp.Compiler.Range
+open FSharp.Compiler.Range
 open System.Runtime.InteropServices
 
 /// Helper methods for interoperating with COM                
@@ -177,6 +178,11 @@ module internal VsTextLines =
     let GetFilename(buffer : IVsTextLines) =
         let ud = (box buffer) :?> IVsUserData
         VsUserData.GetBufferMonker(ud)
+
+    /// Get the string contents of a given buffer (the current snapshot).
+    let GetFileContents(buffer: IVsTextBuffer, editorAdaptersFactoryService: IVsEditorAdaptersFactoryService) =
+        let dataBuffer = editorAdaptersFactoryService.GetDataBuffer(buffer)
+        dataBuffer.CurrentSnapshot.GetText()
     
 
 module internal VsRunningDocumentTable = 

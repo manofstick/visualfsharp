@@ -14,16 +14,17 @@ CodeGen01,NoMT,CodeGen				CodeGen\EmittedIL\DoNotBoxStruct
 CodeGen01,NoMT,CodeGen				CodeGen\EmittedIL\GeneratedIterators
 CodeGen01,NoMT,CodeGen				CodeGen\EmittedIL\InequalityComparison
 CodeGen01,NoMT,CodeGen				CodeGen\EmittedIL\ListExpressionStepping
+CodeGen01,NoMT,CodeGen				CodeGen\EmittedIL\LiteralValue
 CodeGen01,NoMT,CodeGen				CodeGen\EmittedIL\MethodImplAttribute
 CodeGen01,NoMT,CodeGen				CodeGen\EmittedIL\Misc
 CodeGen01,NoMT,CodeGen				CodeGen\EmittedIL\Mutation
 CodeGen01,NoMT,CodeGen				CodeGen\EmittedIL\Operators
-CodeGen01,NoMT,CodeGen				CodeGen\EmittedIL\QueryExpressionStepping
-CodeGen01,NoMT,CodeGen				CodeGen\EmittedIL\SeqExpressionStepping
+Retry,CodeGen01,NoMT,CodeGen				CodeGen\EmittedIL\QueryExpressionStepping
+Retry,CodeGen01,NoMT,CodeGen				CodeGen\EmittedIL\SeqExpressionStepping
 CodeGen01,NoMT,CodeGen				CodeGen\EmittedIL\SeqExpressionTailCalls
 CodeGen01,NoMT,CodeGen,NoHostedCompiler,SerializableAttribute				CodeGen\EmittedIL\SerializableAttribute
 CodeGen01,NoMT,CodeGen				CodeGen\EmittedIL\StaticInit
-CodeGen01,NoMT,CodeGen				CodeGen\EmittedIL\SteppingMatch
+Retry,CodeGen01,NoMT,CodeGen				CodeGen\EmittedIL\SteppingMatch
 CodeGen01,NoMT,CodeGen				CodeGen\EmittedIL\TailCalls
 CodeGen01,NoMT,CodeGen				CodeGen\EmittedIL\TestFunctions
 CodeGen01,NoMT,CodeGen				CodeGen\EmittedIL\Tuples
@@ -41,12 +42,13 @@ CompilerOptions01,NoMT				CompilerOptions\fsc\flaterrors
 CompilerOptions02,NoMT				CompilerOptions\fsc\gccerrors
 CompilerOptions01,NoMT,help				CompilerOptions\fsc\help
 CompilerOptions01,NoMT				CompilerOptions\fsc\highentropyva
+CompilerOptions01,NoMT				CompilerOptions\fsc\langversion
 CompilerOptions01,NoMT				CompilerOptions\fsc\lib
 CompilerOptions01,NoMT				CompilerOptions\fsc\noframework
 CompilerOptions01,NoMT				CompilerOptions\fsc\nologo
 CompilerOptions01,NoMT				CompilerOptions\fsc\optimize
 CompilerOptions01,NoMT				CompilerOptions\fsc\out
-CompilerOptions01,NoMT				CompilerOptions\fsc\pdb
+CompilerOptions01,NoMT,pdbs				CompilerOptions\fsc\pdb
 CompilerOptions01,NoMT				CompilerOptions\fsc\platform
 CompilerOptions01,NoMT				CompilerOptions\fsc\reference
 CompilerOptions01,NoMT				CompilerOptions\fsc\Removed
@@ -55,18 +57,19 @@ CompilerOptions01,NoMT,NoHostedCompiler		CompilerOptions\fsc\staticlink
 CompilerOptions01,NoMT				CompilerOptions\fsc\subsystemversion
 CompilerOptions01,NoMT				CompilerOptions\fsc\tailcalls
 CompilerOptions01,NoMT				CompilerOptions\fsc\target
-CompilerOptions01,NoMT				CompilerOptions\fsc\times
+CompilerOptions01,NoMT,NoHostedCompiler				CompilerOptions\fsc\times
 CompilerOptions01,NoMT				CompilerOptions\fsc\warn
 CompilerOptions01,NoMT				CompilerOptions\fsc\warnaserror
 CompilerOptions01,NoMT				CompilerOptions\fsc\warnon
 CompilerOptions01,NoMT				CompilerOptions\fsc\responsefile
 CompilerOptions01,NoMT,help				CompilerOptions\fsi\help
 CompilerOptions01,NoMT				CompilerOptions\fsi\highentropyva
+CompilerOptions01,NoMT				CompilerOptions\fsi\langversion
 CompilerOptions01,NoMT				CompilerOptions\fsi\nologo
 CompilerOptions01,NoMT				CompilerOptions\fsi\subsystemversion
 CompilerOptions01,NoMT				CompilerOptions\fsi\times
 CompilerOptions02,NoMT				CompilerOptions\fsi\exename
-
+CompilerOptions01,NoMT,Determinism				CompilerOptions\fsc\determinism
 
 Conformance01			Conformance\BasicGrammarElements\Constants
 Conformance01			Conformance\BasicGrammarElements\OperatorNames
@@ -88,6 +91,7 @@ Conformance01			Conformance\DeclarationElements\AccessibilityAnnotations\OnOverr
 Conformance01			Conformance\DeclarationElements\AccessibilityAnnotations\OnTypeMembers
 Conformance01			Conformance\DeclarationElements\AccessibilityAnnotations\PermittedLocations
 Conformance01			Conformance\DeclarationElements\CustomAttributes\ArgumentsOfAllTypes
+Conformance01			Conformance\DeclarationElements\CustomAttributes\AttributeInheritance
 
 Conformance02			Conformance\DeclarationElements\CustomAttributes\AttributeUsage
 Conformance02			Conformance\DeclarationElements\CustomAttributes\Basic
@@ -105,6 +109,7 @@ Conformance02			Conformance\DeclarationElements\MemberDefinitions\ImplementingDi
 Conformance02			Conformance\DeclarationElements\MemberDefinitions\MethodsAndProperties
 Conformance02			Conformance\DeclarationElements\MemberDefinitions\NamedArguments
 Conformance02			Conformance\DeclarationElements\MemberDefinitions\OptionalArguments
+Conformance02			Conformance\DeclarationElements\MemberDefinitions\OptionalDefaultParameterValueArguments
 Conformance02			Conformance\DeclarationElements\MemberDefinitions\OverloadingMembers
 Conformance02			Conformance\DeclarationElements\ModuleAbbreviations
 Conformance02			Conformance\DeclarationElements\ObjectConstructors
@@ -132,7 +137,6 @@ Conformance03			Conformance\Expressions\DataExpressions\QueryExpressions
 Conformance03			Conformance\Expressions\DataExpressions\RangeExpressions
 
 Conformance04			Conformance\Expressions\DataExpressions\SequenceExpressions
-Conformance04			Conformance\Expressions\DataExpressions\Simple
 Conformance04			Conformance\Expressions\DataExpressions\TupleExpressions
 Conformance04			Conformance\Expressions\ElaborationAndElaboratedExpressions
 Conformance04			Conformance\Expressions\EvaluationAndValues
@@ -224,6 +228,7 @@ Conformance08			Conformance\Signatures\SignatureConformance
 Conformance08			Conformance\Signatures\SignatureTypes
 Conformance08			Conformance\SpecialAttributesAndTypes\Imported\System.ThreadStatic
 Conformance08			Conformance\SpecialAttributesAndTypes\Imported\CallerInfo
+Conformance08			Conformance\StructFieldEqualityComparison
 Conformance08			Conformance\TypesAndTypeConstraints\CheckingSyntacticTypes
 Conformance08			Conformance\TypesAndTypeConstraints\LogicalPropertiesOfTypes
 Conformance08			Conformance\TypesAndTypeConstraints\TypeConstraints
@@ -237,6 +242,7 @@ Conformance08			Conformance\UnitsOfMeasure\Parenthesis
 Conformance08			Conformance\UnitsOfMeasure\Parsing
 Conformance08			Conformance\UnitsOfMeasure\TypeChecker
 Conformance08			Conformance\UnitsOfMeasure\WithOOP
+Conformance08			Conformance\Expressions\DataExpressions\NameOf
 
 Misc01			ClrFx\PseudoCustomAttributes\AssemblyAlgorithmId
 Misc01			ClrFx\PseudoCustomAttributes\AssemblyConfiguration
@@ -250,6 +256,7 @@ Misc01			Globalization
 Misc01,NoMT		Import
 Misc01,NoMT		..\..\..\testsprivate\fsharpqa\Source\InteractiveSession\AssemblyLoading
 Misc01,NoMT		InteractiveSession\Misc
+Misc01,NoMT		InteractiveSession\Misc\GenericConstraintWoes\issue2411
 Misc01			Libraries\Control
 Misc01			Libraries\Core\collections
 Misc01			Libraries\Core\ExtraTopLevelOperators
@@ -259,8 +266,8 @@ Misc01			Libraries\Core\Operators
 Misc01			Libraries\Core\Reflection
 Misc01			Libraries\Core\Unchecked
 Misc01			Warnings
-Misc01			ErrorMessages\NameResolution
 Misc01			ErrorMessages\UnitGenericAbstractType
+Misc01			ErrorMessages\ConfusingTypeName
 
 Misc02			Libraries\Portable
 Misc02			Misc

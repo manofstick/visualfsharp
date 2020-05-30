@@ -121,7 +121,7 @@ module OverloadSamples =
 
     type 'a GenericVector 
       with
-        // Nb. For an operator assocaited with a generic type 
+        // Nb. For an operator associated with a generic type 
         // the the type parameters involved in the operator's definition must be the same 
         // as the type parameters of the enclosing class.
         static member (+) ((x : 'a GenericVector),(y : 'a GenericVector)) = add x y
@@ -217,15 +217,14 @@ module BasicOverloadTests =
     // This gets type DateTime -> DateTime -> TimeSpan, through non-conservative resolution.
     let f6 x1 (x2:System.DateTime) = x1 - x2
 
-    // This gets type TimeSpan -> TimeSpan -> TimeSpan, through non-conservative resolution.
+    // This gets type TimeSpan -> TimeSpan -> TimeSpan, through default type propagation
     let f7 x1 (x2:System.TimeSpan) = x1 - x2
 
-    // This gets type TimeSpan -> TimeSpan -> TimeSpan, through non-conservative resolution.
+    // This gets type TimeSpan -> TimeSpan -> TimeSpan, through default type propagation
     let f8 x1 (x2:System.TimeSpan) = x2 - x1
 
-    // This gets type TimeSpan -> TimeSpan -> TimeSpan, through non-conservative resolution.
+    // This gets type TimeSpan -> TimeSpan -> TimeSpan, through default type propagation
     let f9 (x1:System.TimeSpan) x2 = x1 - x2
-
 
     // This gets type TimeSpan -> TimeSpan -> TimeSpan
     let f10 x1 (x2:System.TimeSpan) = x1 + x2

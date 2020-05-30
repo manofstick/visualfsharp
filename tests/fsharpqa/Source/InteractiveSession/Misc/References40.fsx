@@ -1,4 +1,4 @@
-// #NoMT #FSI #NoMono #NETFX40Only 
-//<Expect status=success>v4\.0.+System\.Core\.dll</Expect>
+// #NoMT #FSI #NoMono  
+//<Expect status="success">v4\.0.+System\.Core\.dll</Expects>
 #r "System.Core.dll";;
 exit 0;;

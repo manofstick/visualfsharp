@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
 namespace Microsoft.VisualStudio.FSharp.Interactive
 
@@ -19,7 +19,8 @@ open EnvDTE
 open Microsoft.VisualStudio.ComponentModelHost
 open Microsoft.VisualStudio.Editor
 open Microsoft.VisualStudio.Text.Editor
-
+open Microsoft.VisualStudio.Text
+open Microsoft.VisualStudio.Utilities
 
 type VSStd2KCmdID = VSConstants.VSStd2KCmdID // nested type
 type VSStd97CmdID = VSConstants.VSStd97CmdID // nested type
@@ -78,34 +79,25 @@ type internal FsiEditorSendAction =
     | ExecuteLine
     | DebugSelection
 
-[<Guid("dee22b65-9761-4a26-8fb2-759b971d6dfc")>] //REVIEW: double check fresh guid! IIRC it is.
+[<Guid(Guids.guidFsiSessionToolWindow)>]
 type internal FsiToolWindow() as this = 
     inherit ToolWindowPane(null)
     
-    do  assert("dee22b65-9761-4a26-8fb2-759b971d6dfc" = Guids.guidFsiSessionToolWindow)
-    
     let providerGlobal = Package.GetGlobalService(typeof<IOleServiceProvider>) :?> IOleServiceProvider
     let provider       = new ServiceProvider(providerGlobal) :> System.IServiceProvider
-    let editorAdaptersFactory =
+    let textViewAdapter, contentTypeRegistry =
         // end of 623708 workaround. 
         let componentModel = provider.GetService(typeof<SComponentModel>) :?> IComponentModel
-        componentModel.GetService<IVsEditorAdaptersFactoryService>()
+        componentModel.GetService<IVsEditorAdaptersFactoryService>(), componentModel.GetService<IContentTypeRegistryService>()
 
     // REVIEW: trap provider nulls?    
     let providerNative = provider.GetService(typeof<IOleServiceProvider>) :?> IOleServiceProvider            
-    let textLines      = Util.CreateObjectT<VsTextBufferClass,IVsTextLines> provider            
+    let textLines      = Util.CreateObjectT<VsTextBufferClass,IVsTextLines> provider  
     do  setSiteForObjectWithSite textLines providerNative
     do  textLines.InitializeContent("", 0) |> throwOnFailure0
     let textView       = Util.CreateObjectT<VsTextViewClass,IVsTextView> provider
     do  setSiteForObjectWithSite textView  providerNative
-
-    // We want to disable zooming in the VFSI window. This code does that.
-    let userData = textView :?> IVsUserData
-    do if userData <> null then
-           let roles = "ANALYZABLE,INTERACTIVE"
-           let mutable guid_VsTextViewRoles = new Guid("{297078ff-81a2-43d8-9ca3-4489c53c99ba}")
-           userData.SetData(&guid_VsTextViewRoles, roles) |> throwOnFailure0
-
+    
     do  textView.Initialize(textLines,
                             IntPtr.Zero,
                             uint32 TextViewInitFlags.VIF_VSCROLL ||| uint32 TextViewInitFlags.VIF_HSCROLL ||| uint32 TextViewInitFlags3.VIF_NO_HWND_SUPPORT,
@@ -130,7 +122,7 @@ type internal FsiToolWindow() as this =
     do  codeWinMan.OnNewView(textView)  |> throwOnFailure0
 
     //  Create the stream on top of the text buffer.
-    let textStream = new TextBufferStream(editorAdaptersFactory.GetDataBuffer(textLines))
+    let textStream = new TextBufferStream(textViewAdapter.GetDataBuffer(textLines), contentTypeRegistry)
     let synchronizationContext = System.Threading.SynchronizationContext.Current
     let win32win = { new System.Windows.Forms.IWin32Window with member this.Handle = textView.GetWindowHandle()}
     let mutable textView       = textView
@@ -152,7 +144,7 @@ type internal FsiToolWindow() as this =
     //
     // REVIEW: Next question, can WORD-WRAP be toggled on by default? Do we want that? Maybe not!
     let setTextViewProperties() =
-          let wpfTextView = editorAdaptersFactory.GetWpfTextView(textView)
+          let wpfTextView = textViewAdapter.GetWpfTextView(textView)
           // Enable find in the text view without implementing the IVsFindTarget interface (by allowing                
           // the active text view to directly respond to the find manager via the locate find target                
           // command)  
@@ -185,11 +177,11 @@ type internal FsiToolWindow() as this =
             let horizontalScrollbar = 0
             let verticalScrollbar   = 1                
             // Make sure that the last line of the buffer is visible. [ignore errors].            
-            let buffer = editorAdaptersFactory.GetDataBuffer(textLines)
+            let buffer = textViewAdapter.GetDataBuffer(textLines)
             let lastLine = buffer.CurrentSnapshot.LineCount - 1
             if lastLine >= 0 then
                 let lineStart = buffer.CurrentSnapshot.GetLineFromLineNumber(lastLine).Start
-                let wpfTextView = editorAdaptersFactory.GetWpfTextView(textView)
+                let wpfTextView = textViewAdapter.GetWpfTextView(textView)
                 wpfTextView.DisplayTextLineContainingBufferPosition(lineStart, 0.0, ViewRelativePosition.Bottom)
 
     let setScrollToStartOfLine() =
@@ -203,7 +195,7 @@ type internal FsiToolWindow() as this =
 
     // F# Interactive sessions
     let history  = HistoryBuffer()
-    let sessions = Session.createSessions()
+    let sessions = Session.FsiSessions()
     do  fsiLangService.Sessions <- sessions    
     let writeTextAndScroll (str:string) =
         if str <> null && textLines <> null then
@@ -301,13 +293,13 @@ type internal FsiToolWindow() as this =
 
     let executeTextNoHistory (text:string) =
         textStream.DirectWriteLine()
-        sessions.Input(text)
+        sessions.SendInput(text)
         setCursorAtEndOfBuffer()
         
     let executeText (text:string) =
         textStream.DirectWriteLine()
         history.Add(text)
-        sessions.Input(text)
+        sessions.SendInput(text)
         setCursorAtEndOfBuffer()
 
     let executeUserInput() = 
@@ -316,7 +308,7 @@ type internal FsiToolWindow() as this =
             textStream.ExtendReadOnlyMarker()
             textStream.DirectWriteLine()
             history.Add(text)
-            sessions.Input(text)
+            sessions.SendInput(text)
             setCursorAtEndOfBuffer()
 
     // NOTE: SupportWhen* functions are guard conditions for command handlers
@@ -498,21 +490,6 @@ type internal FsiToolWindow() as this =
             match RegistryHelpers.tryReadHKCU (defaultVSRegistryRoot + "\\" + settingsRegistrySubKey) debugPromptRegistryValue with
             | Some(1) -> true  // warning dialog suppressed
             | _ ->
-#if VS_VERSION_DEV12
-                let result = 
-                    VsShellUtilities.ShowMessageBox( 
-                        serviceProvider = provider, 
-                        message = VFSIstrings.SR.sessionIsNotDebugFriendly(), 
-                        title = VFSIstrings.SR.fsharpInteractive(), 
-                        icon = OLEMSGICON.OLEMSGICON_WARNING,  
-                        msgButton = OLEMSGBUTTON.OLEMSGBUTTON_YESNO,  
-                        defaultButton = OLEMSGDEFBUTTON.OLEMSGDEFBUTTON_FIRST 
-                    ) 
-                
-                // if user picks YES, allow debugging anyways 
-                result = 6 
-
-#else
                 let mutable suppressDiag = false
                 let result =
                     Microsoft.VisualStudio.PlatformUI.MessageDialog.Show(
@@ -528,7 +505,6 @@ type internal FsiToolWindow() as this =
 
                 // if user picks YES, allow debugging anyways
                 result = Microsoft.VisualStudio.PlatformUI.MessageDialogCommand.Yes
-#endif
 
     let onAttachDebugger (sender:obj) (args:EventArgs) =
         if checkDebuggability() then
@@ -784,7 +760,7 @@ type internal FsiToolWindow() as this =
         member this.QueryStatus (guid, cCmds, prgCmds, pCmdText)=
 
             // Added to prevent command processing when the zoom control in the margin is focused
-            let wpfTextView = editorAdaptersFactory.GetWpfTextView(textView)
+            let wpfTextView = textViewAdapter.GetWpfTextView(textView)
 
             // Can't search in the F# Interactive window
             // InterceptsCommandRouting property denotes whether this element requires normal input as opposed to VS commands

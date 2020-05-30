@@ -1,4 +1,4 @@
-#if CoreClr
+#if NETCOREAPP
 open CoreClrUtilities
 #endif
 

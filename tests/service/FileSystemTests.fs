@@ -1,6 +1,6 @@
 ﻿#if INTERACTIVE
-#r "../../Debug/net40/bin/FSharp.LanguageService.Compiler.dll"
-#r "../../Debug/net40/bin/nunit.framework.dll"
+#r "../../artifacts/bin/fcs/net461/FSharp.Compiler.Service.dll" // note, build FSharp.Compiler.Service.Tests.fsproj to generate this, this DLL has a public API so can be used from F# Interactive
+#r "../../artifacts/bin/fcs/net461/nunit.framework.dll"
 #load "FsUnit.fs"
 #load "Common.fs"
 #else
@@ -12,11 +12,9 @@ open NUnit.Framework
 open FsUnit
 open System
 open System.IO
-open System.Collections.Generic
 open System.Text
-open Microsoft.FSharp.Compiler
-open Microsoft.FSharp.Compiler.SourceCodeServices
-open Microsoft.FSharp.Compiler.AbstractIL.Internal.Library
+open FSharp.Compiler.SourceCodeServices
+open FSharp.Compiler.AbstractIL.Internal.Library
 open FSharp.Compiler.Service.Tests.Common
 
 let fileName1 = @"c:\mycode\test1.fs" // note, the path doesn' exist
@@ -35,18 +33,21 @@ let B = File1.A + File1.A"""
     interface IFileSystem with
         // Implement the service to open files for reading and writing
         member __.FileStreamReadShim(fileName) = 
-            match files.TryGetValue(fileName) with
+            match files.TryGetValue fileName with
             | true, text -> new MemoryStream(Encoding.UTF8.GetBytes(text)) :> Stream
             | _ -> defaultFileSystem.FileStreamReadShim(fileName)
-
+            
         member __.FileStreamCreateShim(fileName) = 
             defaultFileSystem.FileStreamCreateShim(fileName)
+
+        member __.IsStableFileHeuristic(fileName) = 
+            defaultFileSystem.IsStableFileHeuristic(fileName)
 
         member __.FileStreamWriteExistingShim(fileName) = 
             defaultFileSystem.FileStreamWriteExistingShim(fileName)
 
         member __.ReadAllBytesShim(fileName) = 
-            match files.TryGetValue(fileName) with
+            match files.TryGetValue fileName with
             | true, text -> Encoding.UTF8.GetBytes(text)
             | _ -> defaultFileSystem.ReadAllBytesShim(fileName)
 
@@ -71,10 +72,15 @@ let UseMyFileSystem() =
     Shim.FileSystem <- myFileSystem
     { new IDisposable with member x.Dispose() = Shim.FileSystem <- myFileSystem }
 
+
 [<Test>]
+#if NETCOREAPP
+[<Ignore("SKIPPED: need to check if these tests can be enabled for .NET Core testing of FSharp.Compiler.Service")>]
+#endif
 let ``FileSystem compilation test``() = 
   if System.Environment.OSVersion.Platform = System.PlatformID.Win32NT then // file references only valid on Windows 
     use myFileSystem =  UseMyFileSystem()
+    let programFilesx86Folder = System.Environment.GetEnvironmentVariable("PROGRAMFILES(X86)")
 
     let projectOptions = 
         let allFlags = 
@@ -88,19 +94,21 @@ let ``FileSystem compilation test``() =
                yield "--fullpaths"; 
                yield "--flaterrors"; 
                yield "--target:library"; 
-               for r in [ @"C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.0\mscorlib.dll"; 
-                          @"C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.0\System.dll"; 
-                          @"C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.0\System.Core.dll"] do 
-                     yield "-r:" + r |]
+               for r in [ sysLib "mscorlib"; sysLib "System"; sysLib "System.Core"; fsCoreDefaultReference() ] do 
+                   yield "-r:" + r |]
  
         { ProjectFileName = @"c:\mycode\compilation.fsproj" // Make a name that is unique in this directory.
-          ProjectFileNames = [| fileName1; fileName2 |]
+          ProjectId = None
+          SourceFiles = [| fileName1; fileName2 |]
           OtherOptions = allFlags 
           ReferencedProjects = [| |];
           IsIncompleteTypeCheckEnvironment = false
           UseScriptResolutionRules = true 
           LoadTime = System.DateTime.Now // Not 'now', we don't want to force reloading
-          UnresolvedReferences = None }
+          UnresolvedReferences = None 
+          OriginalLoadReferences = []
+          ExtraProjectInfo = None 
+          Stamp = None }
 
     let results = checker.ParseAndCheckProject(projectOptions) |> Async.RunSynchronously
 
@@ -108,3 +116,4 @@ let ``FileSystem compilation test``() =
     results.AssemblySignature.Entities.Count |> shouldEqual 2
     results.AssemblySignature.Entities.[0].MembersFunctionsAndValues.Count |> shouldEqual 1
     results.AssemblySignature.Entities.[0].MembersFunctionsAndValues.[0].DisplayName |> shouldEqual "B"
+

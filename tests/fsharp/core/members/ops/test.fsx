@@ -1,11 +1,21 @@
 // #Conformance #MemberDefinitions #Overloading #ComputationExpressions 
+#if TESTS_AS_APP
+module Core_members_ops
+#endif
 
-open Microsoft.FSharp.Math
+let failures = ref []
 
-let failures = ref false
-let report_failure () = 
-  stderr.WriteLine " NO"; failures := true
-let test s b = stderr.Write(s:string);  if b then stderr.WriteLine " OK" else report_failure() 
+let report_failure (s : string) = 
+    stderr.Write" NO: "
+    stderr.WriteLine s
+    failures := !failures @ [s]
+
+let test (s : string) b = 
+    stderr.Write(s)
+    if b then stderr.WriteLine " OK"
+    else report_failure (s)
+
+let check s b1 b2 = test s (b1 = b2)
 
 module FuncTest = 
 
@@ -116,7 +126,7 @@ module OverloadSamples =
 
     type 'a GenericVector 
       with
-        // Nb. For an operator assocaited with a generic type 
+        // Nb. For an operator associated with a generic type 
         // the the type parameters involved in the operator's definition must be the same 
         // as the type parameters of the enclosing class.
         static member (+) ((x : 'a GenericVector),(y : 'a GenericVector)) = add x y
@@ -209,16 +219,16 @@ module BasicOverloadTests =
     // This gets type int -> int
     let f5 x = 1 - x
 
-    // This gets type DateTime -> DateTime -> TimeSpan, through non-conservative resolution.
-    let f6 x1 (x2:System.DateTime) = x1 - x2
+    // // This gets type DateTime -> DateTime -> TimeSpan, through non-conservative resolution.
+    // let f6 x1 (x2:System.DateTime) = x1 - x2
 
-    // This gets type TimeSpan -> TimeSpan -> TimeSpan, through non-conservative resolution.
+    // This gets type TimeSpan -> TimeSpan -> TimeSpan, through default type propagation
     let f7 x1 (x2:System.TimeSpan) = x1 - x2
 
-    // This gets type TimeSpan -> TimeSpan -> TimeSpan, through non-conservative resolution.
+    // This gets type TimeSpan -> TimeSpan -> TimeSpan, through default type propagation
     let f8 x1 (x2:System.TimeSpan) = x2 - x1
 
-    // This gets type TimeSpan -> TimeSpan -> TimeSpan, through non-conservative resolution.
+    // This gets type TimeSpan -> TimeSpan -> TimeSpan, through default type propagation
     let f9 (x1:System.TimeSpan) x2 = x1 - x2
 
 
@@ -380,7 +390,6 @@ module TraitCallsAndConstructors =
      
     let _ : Inherited = -aInherited
 
-
 module CodeGenTraitCallWitnessesNotBeingInlined = 
     // From: http://stackoverflow.com/questions/28243963/how-to-write-a-variadic-function-in-f-emulating-a-similar-haskell-solution/28244413#28244413
     type T = T with
@@ -399,9 +408,18 @@ module CodeGenTraitCallWitnessesNotBeingInlined =
         let y:int = sum 2 3 4       // this line was throwing TypeInitializationException in Debug build
 
 
-let _ = 
-  if !failures then (stdout.WriteLine "Test Failed"; exit 1) 
-  else (stdout.WriteLine "Test Passed"; 
-        System.IO.File.WriteAllText("test.ok","ok"); 
-        exit 0)
+
+#if TESTS_AS_APP
+let RUN() = !failures
+#else
+let aa =
+  match !failures with 
+  | [] -> 
+      stdout.WriteLine "Test Passed"
+      System.IO.File.WriteAllText("test.ok","ok")
+      exit 0
+  | _ -> 
+      stdout.WriteLine "Test Failed"
+      exit 1
+#endif
 

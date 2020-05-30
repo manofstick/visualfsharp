@@ -100,3 +100,14 @@ module TypeParamAttributesDifferent =
    val x4< [<System.CLSCompliantAttribute(true)>] 'T> : 'T -> 'T
 
 type ThisLibAssembly 
+
+
+
+#if !NETSTANDARD
+module Bug719 = 
+
+    open System.Runtime.InteropServices
+
+    type IFoo =
+        abstract Test : [<DefaultParameterValueAttribute(null)>]?value:int -> string
+#endif

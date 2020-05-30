@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
 namespace Microsoft.VisualStudio.FSharp.ProjectSystem
 
@@ -27,7 +27,6 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
     open Microsoft.VisualStudio
     open Microsoft.VisualStudio.Shell
     open Microsoft.VisualStudio.Shell.Interop
-    open Microsoft.VisualStudio.Shell.Flavor
     open Microsoft.VisualStudio.OLE.Interop
     open Microsoft.VisualStudio.FSharp.ProjectSystem
     open Microsoft.VisualStudio.FSharp.LanguageService
@@ -47,7 +46,7 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
         let mutable document : System.Xml.Linq.XDocument = null
         let mutable buffer : IVsTextLines = null
         let mutable rdtCookie : uint32 = 0u
-
+        
         member private x.InitDocData(itemid, filename) =
             let mutable hr = VSConstants.E_FAIL
             let rdt = site.GetService(typeof<SVsRunningDocumentTable>) :?> IVsRunningDocumentTable
@@ -360,10 +359,10 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
                         "3.78.41.0",  "3.78.41.0",  ["3.78.41.0"]  
                         "3.259.4.0",  "3.259.41.0", ["3.259.3.1";  "3.259.4.0"]
                         "3.259.41.0", "3.259.41.0", ["3.259.41.0"] 
-                        "4.3.0.0",    "4.4.1.0",    ["2.0.0.0";    "2.3.0.0";   "2.3.5.0";    "4.0.0.0";   "4.3.0.0"]
-                        "4.3.1.0",    "4.4.1.0",    ["3.3.1.0";    "2.3.5.1";   "3.78.3.1";   "3.259.3.1"; "4.3.1.0"]
-                        "4.4.0.0",    "4.4.1.0",    ["3.47.4.0";   "3.78.4.0";  "3.259.4.0";  "4.4.0.0"]
-                        "4.4.1.0",    "4.4.1.0",    ["3.47.41.0";  "3.78.41.0"; "3.259.41.0"; "4.4.0.0";   "4.4.1.0"]
+                        "4.3.0.0",    "4.4.3.0",    ["2.0.0.0";    "2.3.0.0";   "2.3.5.0";    "4.0.0.0";   "4.3.0.0"]
+                        "4.3.1.0",    "4.4.3.0",    ["3.3.1.0";    "2.3.5.1";   "3.78.3.1";   "3.259.3.1"; "4.3.1.0"]
+                        "4.4.0.0",    "4.4.3.0",    ["3.47.4.0";   "3.78.4.0";  "3.259.4.0";  "4.4.0.0"]
+                        "4.4.1.0",    "4.4.3.0",    ["3.47.41.0";  "3.78.41.0"; "3.259.41.0"; "4.4.1.0";   "4.4.3.0"]
                     ] |> Seq.where(fun (min, max, _) -> targetFSharpCoreVersion >= min && targetFSharpCoreVersion <= max)
 
                 // some helpers to simplify work with XLinq
@@ -393,7 +392,7 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
                     el
 
                 let createRedirect p (oldVersion, newVersion) =
-                    create p (xnameAsmV1 BindingRedirect) [xname OldVersion, oldVersion; xname NewVersion, newVersion] |> ignore
+                    if oldVersion < newVersion then create p (xnameAsmV1 BindingRedirect) [xname OldVersion, oldVersion; xname NewVersion, newVersion] |> ignore
 
                 let getOrCreate(p : System.Xml.Linq.XElement) name =
                     match p.Element(name) with

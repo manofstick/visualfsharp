@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
 /// Diagnostics from the AbsIL toolkit. You can reset the diagnostics 
 /// stream to point elsewhere, or turn it
@@ -6,7 +6,7 @@
 /// points to stderr.  All functions call flush() automatically.
 ///
 /// REVIEW: review if we should just switch to System.Diagnostics
-module internal Microsoft.FSharp.Compiler.AbstractIL.Diagnostics
+module internal FSharp.Compiler.AbstractIL.Diagnostics
 
 open System.IO
 open Microsoft.FSharp.Core.Printf

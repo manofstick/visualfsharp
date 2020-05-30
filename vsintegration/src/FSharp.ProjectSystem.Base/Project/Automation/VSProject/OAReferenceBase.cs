@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
 using System;
 using System.Runtime.InteropServices;
@@ -6,7 +6,6 @@ using System.Runtime.InteropServices;
 using Microsoft.VisualStudio.FSharp.ProjectSystem;
 using VSLangProj;
 using System.Diagnostics.CodeAnalysis;
-using Microsoft.VisualStudio.FSharp.LanguageService;
 
 namespace Microsoft.VisualStudio.FSharp.ProjectSystem.Automation
 {
@@ -158,7 +157,7 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem.Automation
         public virtual void Remove()
         {
             UIThread.DoOnUIThread(delegate(){
-                BaseReferenceNode.Remove(false);
+                BaseReferenceNode.Remove(removeFromStorage: false);
             });
         }
 

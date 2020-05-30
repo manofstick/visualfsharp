@@ -1,13 +1,9 @@
-// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
 // This file is compiled 3(!) times in the codebase
-//    - as the internal implementation of printf '%A' formatting 
-//           defines: RUNTIME
-//    - as the internal implementation of structured formatting in the FSharp.Compiler-proto.dll 
-//           defines: COMPILER + BUILDING_WITH_LKG
-//    - as the internal implementation of structured formatting in FSharp.Compiler.dll 
+//    - as the internal implementation of printf '%A' formatting in FSharp.Core
+//    - as the internal implementation of structured formatting in the compiler and F# Interactive
 //           defines: COMPILER 
-//           NOTE: this implementation is used by fsi.exe. This is very important.
 //
 // The one implementation file is used because we very much want to keep the implementations of
 // structured formatting the same for fsi.exe and '%A' printing. However fsi.exe may have
@@ -19,50 +15,74 @@
 #nowarn "52" // The value has been copied to ensure the original is not mutated by this operation
 
 #if COMPILER
-// FSharp.Compiler-proto.dll:
-// FSharp.Compiler.dll:
 namespace Internal.Utilities.StructuredFormat
 #else
-#if RUNTIME 
 // FSharp.Core.dll:
 namespace Microsoft.FSharp.Text.StructuredPrintfImpl
-#else
-// Powerpack: 
-namespace Microsoft.FSharp.Text.StructuredFormat
-#endif
 #endif
 
     // Breakable block layout implementation.
     // This is a fresh implementation of pre-existing ideas.
 
     open System
-    open System.Diagnostics
-    open System.Text
     open System.IO
     open System.Reflection
     open System.Globalization
     open System.Collections.Generic
     open Microsoft.FSharp.Core
     open Microsoft.FSharp.Core.LanguagePrimitives.IntrinsicOperators
-    open Microsoft.FSharp.Core.Operators
     open Microsoft.FSharp.Reflection
     open Microsoft.FSharp.Collections
-    open Microsoft.FSharp.Primitives.Basics
 
-#if FX_RESHAPED_REFLECTION
-    open PrimReflectionAdapters
-    open ReflectionAdapters
-#endif
+    [<StructuralEquality; NoComparison>]
+    type LayoutTag =
+        | ActivePatternCase
+        | ActivePatternResult
+        | Alias
+        | Class
+        | Union
+        | UnionCase
+        | Delegate
+        | Enum
+        | Event
+        | Field
+        | Interface
+        | Keyword
+        | LineBreak
+        | Local
+        | Record
+        | RecordField
+        | Method
+        | Member
+        | ModuleBinding
+        | Module
+        | Namespace
+        | NumericLiteral
+        | Operator
+        | Parameter
+        | Property
+        | Space
+        | StringLiteral
+        | Struct
+        | TypeParameter
+        | Text
+        | Punctuation
+        | UnknownType
+        | UnknownEntity
+
+    type TaggedText =
+        abstract Tag: LayoutTag
+        abstract Text: string
+
+    type TaggedTextWriter =
+        abstract Write: t: TaggedText -> unit
+        abstract WriteLine: unit -> unit
 
     /// A joint, between 2 layouts, is either:
     ///  - unbreakable, or
     ///  - breakable, and if broken the second block has a given indentation.
     [<StructuralEquality; NoComparison>]
-#if COMPILER
-    type internal Joint =
-#else
     type Joint =
-#endif
      | Unbreakable
      | Breakable of int
      | Broken of int
@@ -72,48 +92,121 @@ namespace Microsoft.FSharp.Text.StructuredFormat
     ///
     /// If either juxt flag is true, then no space between words.
     [<NoEquality; NoComparison>]
-#if COMPILER
-    type internal Layout =
-#else
     type Layout =
-#endif
-     | Leaf of bool * obj * bool
+     | ObjLeaf of bool * obj * bool
+     | Leaf of bool * TaggedText * bool
      | Node of bool * layout * bool * layout * bool * joint
      | Attr of string * (string * string) list * layout
 
-#if COMPILER
-    and internal layout = Layout
-#else
     and layout = Layout
-#endif
 
-#if COMPILER
-    and internal joint = Joint
-#else
     and joint = Joint
-#endif
 
     [<NoEquality; NoComparison>]
-#if COMPILER
-    type internal IEnvironment = 
-#else
     type IEnvironment = 
-#endif
         abstract GetLayout : obj -> layout
         abstract MaxColumns : int
         abstract MaxRows : int
+
+    module TaggedTextOps =
+        let tag tag text = 
+          { new TaggedText with 
+            member x.Tag = tag
+            member x.Text = text }
+
+        let length (tt: TaggedText) = tt.Text.Length
+        let toText (tt: TaggedText) = tt.Text
+
+        let tagAlias t = tag LayoutTag.Alias t
+        let keywordFunctions = Set ["raise"; "reraise"; "typeof"; "typedefof"; "sizeof"; "nameof"]
+        let keywordTypes = 
+          [
+            "array"
+            "bigint"
+            "bool"
+            "byref"
+            "byte"
+            "char"
+            "decimal"
+            "double"
+            "float"
+            "float32"
+            "int"
+            "int8"
+            "int16"
+            "int32"
+            "int64"
+            "list"
+            "nativeint"
+            "obj"
+            "sbyte"
+            "seq"
+            "single"
+            "string"
+            "unit"
+            "uint"
+            "uint8"
+            "uint16"
+            "uint32"
+            "uint64"
+            "unativeint"
+          ] |> Set.ofList
+        let tagClass name = if Set.contains name keywordTypes then tag LayoutTag.Keyword name else tag LayoutTag.Class name
+        let tagUnionCase t = tag LayoutTag.UnionCase t
+        let tagDelegate t = tag LayoutTag.Delegate t
+        let tagEnum t = tag LayoutTag.Enum t
+        let tagEvent t = tag LayoutTag.Event t
+        let tagField t = tag LayoutTag.Field t
+        let tagInterface t = tag LayoutTag.Interface t
+        let tagKeyword t = tag LayoutTag.Keyword t
+        let tagLineBreak t = tag LayoutTag.LineBreak t
+        let tagLocal t = tag LayoutTag.Local t
+        let tagRecord t = tag LayoutTag.Record t
+        let tagRecordField t = tag LayoutTag.RecordField t
+        let tagMethod t = tag LayoutTag.Method t
+        let tagModule t = tag LayoutTag.Module t
+        let tagModuleBinding name = if keywordFunctions.Contains name then tag LayoutTag.Keyword name else tag LayoutTag.ModuleBinding name
+        let tagNamespace t = tag LayoutTag.Namespace t
+        let tagNumericLiteral t = tag LayoutTag.NumericLiteral t
+        let tagOperator t = tag LayoutTag.Operator t
+        let tagParameter t = tag LayoutTag.Parameter t
+        let tagProperty t = tag LayoutTag.Property t
+        let tagSpace t = tag LayoutTag.Space t
+        let tagStringLiteral t = tag LayoutTag.StringLiteral t
+        let tagStruct t = tag LayoutTag.Struct t
+        let tagTypeParameter t = tag LayoutTag.TypeParameter t
+        let tagText t = tag LayoutTag.Text t
+        let tagPunctuation t = tag LayoutTag.Punctuation t
+
+        module Literals =
+            // common tagged literals
+            let lineBreak = tagLineBreak "\n"
+            let space = tagSpace " "
+            let comma = tagPunctuation ","
+            let semicolon = tagPunctuation ";"
+            let leftParen = tagPunctuation "("
+            let rightParen = tagPunctuation ")"
+            let leftBracket = tagPunctuation "["
+            let rightBracket = tagPunctuation "]"
+            let leftBrace= tagPunctuation "{"
+            let rightBrace = tagPunctuation "}"
+            let leftBraceBar = tagPunctuation "{|"
+            let rightBraceBar = tagPunctuation "|}"
+            let equals = tagOperator "="
+            let arrow = tagPunctuation "->"
+            let questionMark = tagPunctuation "?"
      
-#if COMPILER
-    module internal LayoutOps = 
-#else
     module LayoutOps = 
-#endif
+        open TaggedTextOps
+
         let rec juxtLeft = function
+          | ObjLeaf (jl,_,_)      -> jl
           | Leaf (jl,_,_)         -> jl
           | Node (jl,_,_,_,_,_) -> jl
           | Attr (_,_,l)        -> juxtLeft l
 
         let rec juxtRight = function
+          | ObjLeaf (_,_,jr)         -> jr
           | Leaf (_,_,jr)         -> jr
           | Node (_,_,_,_,jr,_) -> jr
           | Attr (_,_,l)        -> juxtRight l
@@ -128,64 +221,70 @@ namespace Microsoft.FSharp.Text.StructuredFormat
         // constructors
 
 
-        let objL   (obj:obj) = Leaf (false,obj,false)
-        let sLeaf  (l,(str:string),r) = Leaf (l,(str:>obj),r)
-        let wordL  str = sLeaf (false,str,false)
-        let sepL   str = sLeaf (true ,str,true)   
-        let rightL str = sLeaf (true ,str,false)   
-        let leftL  str = sLeaf (false,str,true)
-        let emptyL = sLeaf (true,"",true)
-        let isEmptyL = function 
-         | Leaf(true,s,true) -> 
-            match s with 
-            | :? string as s -> s = "" 
+        let objL (value:obj) = 
+            match value with 
+            | :? string as s -> Leaf (false, tag LayoutTag.Text s, false)
+            | o -> ObjLeaf (false, o, false)
+
+        let sLeaf  (l, t, r) = Leaf (l, t, r)
+
+        let wordL  text = sLeaf (false,text,false)
+        let sepL   text = sLeaf (true ,text,true)   
+        let rightL text = sLeaf (true ,text,false)   
+        let leftL  text = sLeaf (false,text,true)
+
+        let emptyL = sLeaf (true, tag LayoutTag.Text "",true)
+
+        let isEmptyL layout = 
+            match layout with 
+            | Leaf(true, s, true) -> s.Text = ""
             | _ -> false
-         | _ -> false
-         
 
-        let aboveL  l r = mkNode l r (Broken 0)
+        let aboveL  layout1 layout2 = mkNode layout1 layout2 (Broken 0)
 
-        let tagAttrL tag attrs l = Attr(tag,attrs,l)
+        let tagAttrL text maps layout = Attr(text,maps,layout)
 
         let apply2 f l r = if isEmptyL l then r else
                            if isEmptyL r then l else f l r
 
-        let (^^)  l r  = mkNode l r (Unbreakable)
-        let (++)  l r  = mkNode l r (Breakable 0)
-        let (--)  l r  = mkNode l r (Breakable 1)
-        let (---) l r  = mkNode l r (Breakable 2)
-        let (@@)   l r = apply2 (fun l r -> mkNode l r (Broken 0)) l r
-        let (@@-)  l r = apply2 (fun l r -> mkNode l r (Broken 1)) l r
-        let (@@--) l r = apply2 (fun l r -> mkNode l r (Broken 2)) l r
+        let (^^)  layout1 layout2  = mkNode layout1 layout2 (Unbreakable)
+        let (++)  layout1 layout2  = mkNode layout1 layout2 (Breakable 0)
+        let (--)  layout1 layout2  = mkNode layout1 layout2 (Breakable 1)
+        let (---) layout1 layout2  = mkNode layout1 layout2 (Breakable 2)
+        let (@@)   layout1 layout2 = apply2 (fun l r -> mkNode l r (Broken 0)) layout1 layout2
+        let (@@-)  layout1 layout2 = apply2 (fun l r -> mkNode l r (Broken 1)) layout1 layout2
+        let (@@--) layout1 layout2 = apply2 (fun l r -> mkNode l r (Broken 2)) layout1 layout2
         let tagListL tagger = function
             | []    -> emptyL
             | [x]   -> x
-            | x::xs ->
+            | x :: xs ->
                 let rec process' prefixL = function
                   | []    -> prefixL
-                  | y::ys -> process' ((tagger prefixL) ++ y) ys
+                  | y :: ys -> process' ((tagger prefixL) ++ y) ys
                 process' x xs
             
-        let commaListL x = tagListL (fun prefixL -> prefixL ^^ rightL ",") x
-        let semiListL x  = tagListL (fun prefixL -> prefixL ^^ rightL ";") x
-        let spaceListL x = tagListL (fun prefixL -> prefixL) x
-        let sepListL x y = tagListL (fun prefixL -> prefixL ^^ x) y
-        let bracketL l = leftL "(" ^^ l ^^ rightL ")"
-        let tupleL xs = bracketL (sepListL (sepL ",") xs)
-        let aboveListL = function
-          | []    -> emptyL
-          | [x]   -> x
-          | x::ys -> List.fold (fun pre y -> pre @@ y) x ys
+        let commaListL layouts = tagListL (fun prefixL -> prefixL ^^ rightL (Literals.comma)) layouts
+        let semiListL layouts  = tagListL (fun prefixL -> prefixL ^^ rightL (Literals.semicolon)) layouts
+        let spaceListL layouts = tagListL (fun prefixL -> prefixL) layouts
+        let sepListL layout1 layouts = tagListL (fun prefixL -> prefixL ^^ layout1) layouts
+        let bracketL layout = leftL Literals.leftParen ^^ layout ^^ rightL Literals.rightParen
+        let tupleL layouts = bracketL (sepListL (sepL Literals.comma) layouts)
+        let aboveListL layouts = 
+            match layouts with
+            | []    -> emptyL
+            | [x]   -> x
+            | x :: ys -> List.fold (fun pre y -> pre @@ y) x ys
 
-        let optionL xL = function
-          | None   -> wordL "None"
-          | Some x -> wordL "Some" -- (xL x)
+        let optionL selector value = 
+            match value with 
+            | None   -> wordL (tagUnionCase "None")
+            | Some x -> wordL (tagUnionCase "Some") -- (selector x)
 
-        let listL xL xs = leftL "[" ^^ sepListL (sepL ";") (List.map xL xs) ^^ rightL "]"
+        let listL selector value = leftL Literals.leftBracket ^^ sepListL (sepL Literals.semicolon) (List.map selector value) ^^ rightL Literals.rightBracket
 
-        let squareBracketL x = leftL "[" ^^ x ^^ rightL "]"    
+        let squareBracketL layout = leftL Literals.leftBracket ^^ layout ^^ rightL Literals.rightBracket    
 
-        let braceL         x = leftL "{" ^^ x ^^ rightL "}"
+        let braceL         layout = leftL Literals.leftBrace ^^ layout ^^ rightL Literals.rightBrace
 
         let boundedUnfoldL
                     (itemL     : 'a -> layout)
@@ -194,37 +293,26 @@ namespace Microsoft.FSharp.Text.StructuredFormat
                     (z : 'z)
                     maxLength =
           let rec consume n z =
-            if stopShort z then [wordL "..."] else
+            if stopShort z then [wordL (tagPunctuation "...")] else
             match project z with
-              | None       -> []  // exhaused input 
-              | Some (x,z) -> if n<=0 then [wordL "..."]               // hit print_length limit 
+              | None       -> []  // exhausted input 
+              | Some (x,z) -> if n<=0 then [wordL (tagPunctuation "...")]               // hit print_length limit 
                                       else itemL x :: consume (n-1) z  // cons recursive... 
           consume maxLength z  
 
-        let unfoldL itemL project z maxLength = boundedUnfoldL  itemL project (fun _ -> false) z maxLength
+        let unfoldL selector folder state count = boundedUnfoldL  selector folder (fun _ -> false) state count
           
     /// These are a typical set of options used to control structured formatting.
     [<NoEquality; NoComparison>]
-#if COMPILER
-    type internal FormatOptions = 
-#else
-    type FormatOptions = 
-#endif
+    type FormatOptions =
         { FloatingPointFormat: string;
           AttributeProcessor: (string -> (string * string) list -> bool -> unit);
-#if RUNTIME
-#else
-#if COMPILER    // FSharp.Compiler.dll: This is the PrintIntercepts extensibility point currently revealed by fsi.exe's AddPrinter
+#if COMPILER // This is the PrintIntercepts extensibility point currently revealed by fsi.exe's AddPrinter
           PrintIntercepts: (IEnvironment -> obj -> Layout option) list;
           StringLimit : int;
 #endif
-#endif
           FormatProvider: System.IFormatProvider;
-#if FX_RESHAPED_REFLECTION
-          ShowNonPublic : bool
-#else
           BindingFlags: System.Reflection.BindingFlags
-#endif
           PrintWidth : int; 
           PrintDepth : int; 
           PrintLength : int;
@@ -233,19 +321,12 @@ namespace Microsoft.FSharp.Text.StructuredFormat
           ShowIEnumerable: bool; }
         static member Default =
             { FormatProvider = (System.Globalization.CultureInfo.InvariantCulture :> System.IFormatProvider);
-#if RUNTIME
-#else
-#if COMPILER    // FSharp.Compiler.dll: This is the PrintIntercepts extensibility point currently revealed by fsi.exe's AddPrinter
+#if COMPILER    // This is the PrintIntercepts extensibility point currently revealed by fsi.exe's AddPrinter
               PrintIntercepts = [];
               StringLimit = System.Int32.MaxValue;
 #endif
-#endif
               AttributeProcessor= (fun _ _ _ -> ());
-#if FX_RESHAPED_REFLECTION
-              ShowNonPublic = false
-#else
               BindingFlags = System.Reflection.BindingFlags.Public;
-#endif
               FloatingPointFormat = "g10";
               PrintWidth = 80 ; 
               PrintDepth = 100 ; 
@@ -256,18 +337,7 @@ namespace Microsoft.FSharp.Text.StructuredFormat
 
 
 
-#if COMPILER
-    module internal ReflectUtils = 
-#else
     module ReflectUtils = 
-#endif
-        open System
-        open System.Reflection
-
-#if FX_RESHAPED_REFLECTION
-        open PrimReflectionAdapters
-        open Microsoft.FSharp.Core.ReflectionAdapters
-#endif
 
         [<NoEquality; NoComparison>]
         type TypeInfo =
@@ -278,7 +348,7 @@ namespace Microsoft.FSharp.Text.StructuredFormat
           | UnitType
           | ObjectType of Type
 
-        let isNamedType(typ:Type) = not (typ.IsArray || typ.IsByRef || typ.IsPointer)
+        let isNamedType (ty:Type) = not (ty.IsArray || ty.IsByRef || ty.IsPointer)
         let equivHeadTypes (ty1:Type) (ty2:Type) = 
             isNamedType(ty1) &&
             if ty1.IsGenericType then 
@@ -289,31 +359,38 @@ namespace Microsoft.FSharp.Text.StructuredFormat
         let option = typedefof<obj option>
         let func = typedefof<(obj -> obj)>
 
-        let isOptionTy typ = equivHeadTypes typ (typeof<int option>)
-        let isUnitType typ = equivHeadTypes typ (typeof<unit>)
-        let isListType typ = 
-            FSharpType.IsUnion typ && 
-            (let cases = FSharpType.GetUnionCases typ 
+        let isOptionTy ty = equivHeadTypes ty (typeof<int option>)
+        let isUnitType ty = equivHeadTypes ty (typeof<unit>)
+        let isListType ty = 
+            FSharpType.IsUnion ty && 
+            (let cases = FSharpType.GetUnionCases ty 
              cases.Length > 0 && equivHeadTypes (typedefof<list<_>>) cases.[0].DeclaringType)
+
+        [<RequireQualifiedAccess; StructuralComparison; StructuralEquality>]
+        type TupleType =
+            | Value
+            | Reference
 
         [<NoEquality; NoComparison>]
         type ValueInfo =
-          | TupleValue of obj list
+          | TupleValue of TupleType * (obj * Type) list
           | FunctionClosureValue of System.Type 
-          | RecordValue of (string * obj) list
-          | ConstructorValue of string * (string * obj) list
-          | ExceptionValue of System.Type * (string * obj) list
+          | RecordValue of (string * obj * Type) list
+          | ConstructorValue of declaringType: Type option * string * (string * (obj * Type)) list
+          | ExceptionValue of System.Type * (string * (obj * Type)) list
           | UnitValue
           | ObjectValue of obj
 
-        module Value = 
+        module Value =
+
+            // Returns true if a given type has the RequireQualifiedAccess attribute
+            let private requiresQualifiedAccess (declaringType:Type) =
+                let rqaAttr = declaringType.GetCustomAttribute(typeof<RequireQualifiedAccessAttribute>, false)
+                isNull rqaAttr |> not
 
             // Analyze an object to see if it the representation
             // of an F# value.
-            let GetValueInfoOfObject (bindingFlags:BindingFlags) (obj : obj) = 
-#if FX_RESHAPED_REFLECTION
-              let showNonPublic = isNonPublicFlag bindingFlags
-#endif
+            let GetValueInfoOfObject (bindingFlags:BindingFlags) (obj : obj) =
               match obj with 
               | null -> ObjectValue(obj)
               | _ -> 
@@ -325,7 +402,12 @@ namespace Microsoft.FSharp.Text.StructuredFormat
                 // to 7.
 
                 if FSharpType.IsTuple reprty then 
-                    TupleValue (FSharpValue.GetTupleFields obj |> Array.toList)
+                    let tyArgs = FSharpType.GetTupleElements(reprty)
+                    let fields = FSharpValue.GetTupleFields obj |> Array.mapi (fun i v -> (v, tyArgs.[i])) |> Array.toList
+                    let tupleType =
+                        if reprty.Name.StartsWith "ValueTuple" then TupleType.Value
+                        else TupleType.Reference
+                    TupleValue (tupleType, fields)
                 elif FSharpType.IsFunction reprty then 
                     FunctionClosureValue reprty
                     
@@ -334,35 +416,22 @@ namespace Microsoft.FSharp.Text.StructuredFormat
                 // the type are the actual fields of the type.  Again,
                 // we should be reading attributes here that indicate the
                 // true structure of the type, e.g. the order of the fields.   
-#if FX_RESHAPED_REFLECTION
-                elif FSharpType.IsUnion(reprty, showNonPublic) then 
-                    let tag,vals = FSharpValue.GetUnionFields (obj,reprty, showNonPublic) 
-#else
                 elif FSharpType.IsUnion(reprty,bindingFlags) then 
                     let tag,vals = FSharpValue.GetUnionFields (obj,reprty,bindingFlags) 
-#endif
                     let props = tag.GetFields()
-                    let pvals = (props,vals) ||> Array.map2 (fun prop v -> prop.Name,v)
-                    ConstructorValue(tag.Name, Array.toList pvals)
-#if FX_RESHAPED_REFLECTION
-                elif FSharpType.IsExceptionRepresentation(reprty, showNonPublic) then 
-                    let props = FSharpType.GetExceptionFields(reprty, showNonPublic) 
-                    let vals = FSharpValue.GetExceptionFields(obj, showNonPublic)
-#else
+                    let pvals = (props,vals) ||> Array.map2 (fun prop v -> prop.Name,(v, prop.PropertyType))
+                    let declaringType =
+                        if requiresQualifiedAccess tag.DeclaringType then Some tag.DeclaringType
+                        else None
+                    ConstructorValue(declaringType, tag.Name, Array.toList pvals)
                 elif FSharpType.IsExceptionRepresentation(reprty,bindingFlags) then 
                     let props = FSharpType.GetExceptionFields(reprty,bindingFlags) 
                     let vals = FSharpValue.GetExceptionFields(obj,bindingFlags) 
-#endif
-                    let pvals = (props,vals) ||> Array.map2 (fun prop v -> prop.Name,v)
+                    let pvals = (props,vals) ||> Array.map2 (fun prop v -> prop.Name,(v, prop.PropertyType))
                     ExceptionValue(reprty, pvals |> Array.toList)
-#if FX_RESHAPED_REFLECTION
-                elif FSharpType.IsRecord(reprty, showNonPublic) then 
-                    let props = FSharpType.GetRecordFields(reprty, showNonPublic) 
-#else
                 elif FSharpType.IsRecord(reprty,bindingFlags) then 
                     let props = FSharpType.GetRecordFields(reprty,bindingFlags) 
-#endif
-                    RecordValue(props |> Array.map (fun prop -> prop.Name, prop.GetValue(obj,null)) |> Array.toList)
+                    RecordValue(props |> Array.map (fun prop -> prop.Name, prop.GetValue(obj,null), prop.PropertyType) |> Array.toList)
                 else
                     ObjectValue(obj)
 
@@ -370,53 +439,42 @@ namespace Microsoft.FSharp.Text.StructuredFormat
             // statically-known type information to aid in the
             // analysis of null values. 
 
-            let GetValueInfo bindingFlags (x : 'a)  (* x could be null *) = 
+            let GetValueInfo bindingFlags (x : 'a, ty : Type)  (* x could be null *) = 
                 let obj = (box x)
                 match obj with 
-                | null -> 
-                   let typ = typeof<'a>
-                   if isOptionTy typ then  ConstructorValue("None", [])
-                   elif isUnitType typ then  UnitValue
-                   else ObjectValue(obj)
+                | null ->
+                    let isNullaryUnion =
+                        match ty.GetCustomAttributes(typeof<CompilationRepresentationAttribute>, false) with
+                        | [|:? CompilationRepresentationAttribute as attr|] -> 
+                          (attr.Flags &&& CompilationRepresentationFlags.UseNullAsTrueValue) = CompilationRepresentationFlags.UseNullAsTrueValue
+                        | _ -> false
+                    if isNullaryUnion then
+                        let nullaryCase = FSharpType.GetUnionCases ty |> Array.filter (fun uc -> uc.GetFields().Length = 0) |> Array.item 0
+                        let declaringType =
+                            if requiresQualifiedAccess ty then Some ty
+                            else None
+                        ConstructorValue(declaringType, nullaryCase.Name, [])
+                    elif isUnitType ty then UnitValue
+                    else ObjectValue(obj)
                 | _ -> 
                   GetValueInfoOfObject bindingFlags (obj) 
 
-
-            let GetInfo bindingFlags (v:'a) = GetValueInfo bindingFlags (v:'a)
-
-#if COMPILER
-    module internal Display = 
-#else
     module Display = 
-#endif
 
         open ReflectUtils
         open LayoutOps
+        open TaggedTextOps
+
         let string_of_int (i:int) = i.ToString()
 
-        let typeUsesSystemObjectToString (typ:System.Type) =
-#if FX_ATLEAST_PORTABLE
-            try 
-#if FX_RESHAPED_REFLECTION
-                let methInfo = typ.GetRuntimeMethod("ToString",[| |])
-                methInfo.DeclaringType = typeof<System.Object>
-#else
-                let methInfo = typ.GetMethod("ToString",[| |])
-                methInfo.DeclaringType = typeof<System.Object>
-#endif
-            with e -> false
-#else        
-            try let methInfo = typ.GetMethod("ToString",BindingFlags.Public ||| BindingFlags.Instance,null,[| |],null)
+        let typeUsesSystemObjectToString (ty:System.Type) =
+            try
+                let methInfo = ty.GetMethod("ToString",BindingFlags.Public ||| BindingFlags.Instance,null,[| |],null)
                 methInfo.DeclaringType = typeof<System.Object>
             with e -> false
-#endif
         /// If "str" ends with "ending" then remove it from "str", otherwise no change.
         let trimEnding (ending:string) (str:string) =
-#if FX_NO_CULTURE_INFO_ARGS
-          if str.EndsWith(ending) then 
-#else
           if str.EndsWith(ending,StringComparison.Ordinal) then 
-#endif
               str.Substring(0,str.Length - ending.Length) 
           else str
 
@@ -479,7 +537,8 @@ namespace Microsoft.FSharp.Text.StructuredFormat
         // fitting
         // ------------------------------------------------------------------------
           
-        let squashTo (maxWidth,leafFormatter) layout =
+        let squashTo (maxWidth,leafFormatter : _ -> TaggedText) layout =
+            let (|ObjToTaggedText|) = leafFormatter
             if maxWidth <= 0 then layout else 
             let rec fit breaks (pos,layout) =
                 // breaks = break context, can force to get indentation savings.
@@ -499,11 +558,11 @@ namespace Microsoft.FSharp.Text.StructuredFormat
                         let breaks,layout,pos,offset = fit breaks (pos,l) 
                         let layout = Attr (tag,attrs,layout) 
                         breaks,layout,pos,offset
-                    | Leaf (jl,obj,jr) ->
-                        let text:string = leafFormatter obj 
+                    | Leaf (jl, text, jr)
+                    | ObjLeaf (jl, ObjToTaggedText text, jr) ->
                         // save the formatted text from the squash
-                        let layout = Leaf(jl,(text :> obj),jr) 
-                        let textWidth = text.Length
+                        let layout = Leaf(jl, text, jr) 
+                        let textWidth = length text
                         let rec fitLeaf breaks pos =
                           if pos + textWidth <= maxWidth then
                               breaks,layout,pos + textWidth,textWidth // great, it fits 
@@ -559,9 +618,9 @@ namespace Microsoft.FSharp.Text.StructuredFormat
         // showL
         // ------------------------------------------------------------------------
 
-        let combine strs = System.String.Concat(Array.ofList(strs) : string[])
+        let combine (strs: string list) = System.String.Concat strs
         let showL opts leafFormatter layout =
-            let push x rstrs = x::rstrs
+            let push x rstrs = x :: rstrs
             let z0 = [],0
             let addText (rstrs,i) (text:string) = push text rstrs,i + text.Length
             let index   (_,i)               = i
@@ -575,9 +634,11 @@ namespace Microsoft.FSharp.Text.StructuredFormat
             // addL: pos is tab level 
             let rec addL z pos layout = 
                 match layout with 
+                | ObjLeaf (_,obj,_)                 -> 
+                    let text = leafFormatter obj
+                    addText z text                 
                 | Leaf (_,obj,_)                 -> 
-                    let text = leafFormatter obj 
-                    addText z text
+                    addText z obj.Text
                 | Node (_,l,_,r,_,Broken indent) 
                      // Print width = 0 implies 1D layout, no squash
                      when not (opts.PrintWidth = 0)  -> 
@@ -602,25 +663,27 @@ namespace Microsoft.FSharp.Text.StructuredFormat
         // outL
         // ------------------------------------------------------------------------
 
-        let outL outAttribute leafFormatter (chan : TextWriter) layout =
+        let outL outAttribute leafFormatter (chan : TaggedTextWriter) layout =
             // write layout to output chan directly 
-            let write (s:string) = chan.Write(s)
+            let write s = chan.Write(s)
             // z is just current indent 
             let z0 = 0
             let index i = i
-            let addText z text  = write text;  (z + text.Length)
+            let addText z text  = write text;  (z + length text)
             let newLine _ n     = // \n then spaces... 
                 let indent = new System.String(' ',n)
                 chan.WriteLine();
-                write indent;
+                write (tagText indent);
                 n
                 
             // addL: pos is tab level 
             let rec addL z pos layout = 
                 match layout with 
-                | Leaf (_,obj,_)                 -> 
+                | ObjLeaf (_,obj,_)                 -> 
                     let text = leafFormatter obj 
                     addText z text
+                | Leaf (_,obj,_)                 -> 
+                    addText z obj
                 | Node (_,l,_,r,_,Broken indent) -> 
                     let z = addL z pos l
                     let z = newLine z (pos+indent)
@@ -628,7 +691,7 @@ namespace Microsoft.FSharp.Text.StructuredFormat
                     z
                 | Node (_,l,jm,r,_,_)             -> 
                     let z = addL z pos l
-                    let z = if jm then z else addText z " "
+                    let z = if jm then z else addText z Literals.space
                     let pos = index z
                     let z = addL z pos r
                     z 
@@ -645,92 +708,69 @@ namespace Microsoft.FSharp.Text.StructuredFormat
         // pprinter: using general-purpose reflection...
         // -------------------------------------------------------------------- 
           
-        let getValueInfo bindingFlags (x:'a) = Value.GetInfo bindingFlags (x:'a)
+        let getValueInfo bindingFlags (x:'a, ty:Type) = Value.GetValueInfo bindingFlags (x, ty)
 
         let unpackCons recd =
             match recd with 
             | [(_,h);(_,t)] -> (h,t)
             | _             -> failwith "unpackCons"
 
-        let getListValueInfo bindingFlags (x:obj) =
+        let getListValueInfo bindingFlags (x:obj, ty:Type) =
             match x with 
             | null -> None 
             | _ -> 
-                match getValueInfo bindingFlags x with
-                | ConstructorValue ("Cons",recd) -> Some (unpackCons recd)
-                | ConstructorValue ("Empty",[]) -> None
+                match getValueInfo bindingFlags (x, ty) with
+                | ConstructorValue (_,"Cons",recd) -> Some (unpackCons recd)
+                | ConstructorValue (_,"Empty",[]) -> None
                 | _ -> failwith "List value had unexpected ValueInfo"
 
-        let compactCommaListL xs = sepListL (sepL ",") xs // compact, no spaces around "," 
-        let nullL = wordL "null"
-        let measureL = wordL "()"
+        let structL = wordL (tagKeyword "struct")
+        let nullL = wordL (tagKeyword "null")
+        let measureL = wordL (tagPunctuation "()")
           
         // --------------------------------------------------------------------
         // pprinter: attributes
         // -------------------------------------------------------------------- 
 
-        let makeRecordVerticalL nameXs =
-            let itemL (name,xL) = let labelL = wordL name in ((labelL ^^ wordL "=")) -- (xL  ^^ (rightL ";"))
-            let braceL xs = (leftL "{") ^^ xs ^^ (rightL "}")
-            braceL (aboveListL (List.map itemL nameXs))
-
-        // This is a more compact rendering of records - and is more like tuples 
-        let makeRecordHorizontalL nameXs = 
-            let itemL (name,xL) = let labelL = wordL name in ((labelL ^^ wordL "=")) -- xL
-            let braceL xs = (leftL "{") ^^ xs ^^ (rightL "}")
-            braceL (sepListL (rightL ";")  (List.map itemL nameXs))
-
-        let makeRecordL nameXs = makeRecordVerticalL nameXs 
+        let makeRecordL nameXs =
+            let itemL (name,xL) = wordL name ^^ wordL Literals.equals -- xL
+            let braceL xs = (wordL Literals.leftBrace) ^^ xs ^^ (wordL Literals.rightBrace)
+            
+            nameXs
+            |> List.map itemL
+            |> aboveListL
+            |> braceL
 
         let makePropertiesL nameXs =
             let itemL (name,v) = 
                let labelL = wordL name 
-               (labelL ^^ wordL "=")
+               (labelL ^^ wordL Literals.equals)
                ^^ (match v with 
-                   | None -> wordL "?" 
+                   | None -> wordL Literals.questionMark
                    | Some xL -> xL)
-               ^^ (rightL ";")
-            let braceL xs = (leftL "{") ^^ xs ^^ (rightL "}")
+               ^^ (rightL Literals.semicolon)
+            let braceL xs = (leftL Literals.leftBrace) ^^ xs ^^ (rightL Literals.rightBrace)
             braceL (aboveListL (List.map itemL nameXs))
 
         let makeListL itemLs =
-            (leftL "[") 
-            ^^ sepListL (rightL ";") itemLs 
-            ^^ (rightL "]")
+            (leftL Literals.leftBracket) 
+            ^^ sepListL (rightL Literals.semicolon) itemLs 
+            ^^ (rightL Literals.rightBracket)
 
         let makeArrayL xs =
-            (leftL "[|") 
-            ^^ sepListL (rightL ";") xs 
-            ^^ (rightL "|]")
+            (leftL (tagPunctuation "[|")) 
+            ^^ sepListL (rightL Literals.semicolon) xs 
+            ^^ (rightL (tagPunctuation "|]"))
 
-        let makeArray2L xs = leftL "[" ^^ aboveListL xs ^^ rightL "]"  
+        let makeArray2L xs = leftL Literals.leftBracket ^^ aboveListL xs ^^ rightL Literals.rightBracket  
 
         // --------------------------------------------------------------------
         // pprinter: anyL - support functions
         // -------------------------------------------------------------------- 
 
         let getProperty (ty: Type) (obj: obj) name =
-#if FX_ATLEAST_PORTABLE
-            let prop = ty.GetProperty(name, (BindingFlags.Instance ||| BindingFlags.Public ||| BindingFlags.NonPublic))
-            if isNotNull prop then prop.GetValue(obj,[||])
-#if FX_NO_MISSINGMETHODEXCEPTION
-            // Profile 7, 47, 78 and 259 raise MissingMemberException
-            else 
-                let msg = System.String.Concat([| "Method '"; ty.FullName; "."; name; "' not found." |])
-                raise (System.MissingMemberException(msg))
-#else
-            // Others raise MissingMethodException
-            else 
-                let msg = System.String.Concat([| "Method '"; ty.FullName; "."; name; "' not found." |])
-                raise (System.MissingMethodException(msg))
-#endif
-#else
-#if FX_NO_CULTURE_INFO_ARGS
-            ty.InvokeMember(name, (BindingFlags.GetProperty ||| BindingFlags.Instance ||| BindingFlags.Public ||| BindingFlags.NonPublic), null, obj, [| |])
-#else
             ty.InvokeMember(name, (BindingFlags.GetProperty ||| BindingFlags.Instance ||| BindingFlags.Public ||| BindingFlags.NonPublic), null, obj, [| |],CultureInfo.InvariantCulture)
-#endif
-#endif
+
         let getField obj (fieldInfo: FieldInfo) =
             fieldInfo.GetValue(obj)
 
@@ -788,10 +828,10 @@ namespace Microsoft.FSharp.Text.StructuredFormat
             | ShowTopLevelBinding
 
         // polymorphic and inner recursion limitations prevent us defining polyL in the recursive loop 
-        let polyL bindingFlags (objL: ShowMode -> int -> Precedence -> ValueInfo -> obj -> Layout) showMode i prec  (x:'a) (* x could be null *) =
-            objL showMode i prec (getValueInfo bindingFlags (x:'a))  (box x) 
+        let polyL bindingFlags (objL: ShowMode -> int -> Precedence -> ValueInfo -> obj -> Layout) showMode i prec  (x:'a ,ty : Type) (* x could be null *) =
+            objL showMode i prec (getValueInfo bindingFlags (x, ty))  (box x) 
 
-        let anyL showMode bindingFlags (opts:FormatOptions) (x:'a) =
+        let anyL showMode bindingFlags (opts:FormatOptions) (x:'a, ty:Type) =
             // showMode = ShowTopLevelBinding on the outermost expression when called from fsi.exe,
             // This allows certain outputs, e.g. objects that would print as <seq> to be suppressed, etc. See 4343.
             // Calls to layout proper sub-objects should pass showMode = ShowAll.
@@ -802,31 +842,31 @@ namespace Microsoft.FSharp.Text.StructuredFormat
             let path = Dictionary<obj,int>(10,HashIdentity.Reference)
 
             // Roughly count the "nodes" printed, e.g. leaf items and inner nodes, but not every bracket and comma.
-            let size = ref opts.PrintSize
-            let exceededPrintSize() = !size<=0
-            let countNodes n = if !size > 0 then size := !size - n else () // no need to keep decrementing (and avoid wrap around) 
+            let mutable  size = opts.PrintSize
+            let exceededPrintSize() = size<=0
+            let countNodes n = if size > 0 then size <- size - n else () // no need to keep decrementing (and avoid wrap around) 
             let stopShort _ = exceededPrintSize() // for unfoldL
 
             // Recursive descent
-            let rec objL depthLim prec (x:obj) = polyL bindingFlags objWithReprL ShowAll  depthLim prec x // showMode for inner expr 
-            and sameObjL depthLim prec (x:obj) = polyL bindingFlags objWithReprL showMode depthLim prec x // showMode preserved 
+            let rec objL depthLim prec (x:obj, ty:Type) = polyL bindingFlags objWithReprL ShowAll  depthLim prec (x, ty) // showMode for inner expr 
+            and sameObjL depthLim prec (x:obj, ty:Type) = polyL bindingFlags objWithReprL showMode depthLim prec (x, ty) // showMode preserved 
 
             and objWithReprL showMode depthLim prec (info:ValueInfo) (x:obj) (* x could be null *) =
                 try
-                  if depthLim<=0 || exceededPrintSize() then wordL "..." else
+                  if depthLim<=0 || exceededPrintSize() then wordL (tagPunctuation "...") else
                   match x with 
                   | null -> 
                     reprL showMode (depthLim-1) prec info x
                   | _    ->
                     if (path.ContainsKey(x)) then 
-                       wordL "..."
+                       wordL (tagPunctuation "...")
                     else 
                         path.Add(x,0);
                         let res = 
                           // Lazy<T> values. VS2008 used StructuredFormatDisplayAttribute to show via ToString. Dev10 (no attr) needs a special case.
                           let ty = x.GetType()
                           if ty.IsGenericType && ty.GetGenericTypeDefinition() = typedefof<Lazy<_>> then
-                            Some (wordL (x.ToString()))
+                            Some (wordL (tagText(x.ToString())))
                           else
                             // Try the StructuredFormatDisplayAttribute extensibility attribute
                             match ty.GetCustomAttributes (typeof<StructuredFormatDisplayAttribute>, true) with
@@ -856,8 +896,8 @@ namespace Microsoft.FSharp.Text.StructuredFormat
                                         let illFormedMatch = System.Text.RegularExpressions.Regex.IsMatch(txt, illFormedBracketPattern)
                                         match illFormedMatch with
                                         | true -> None // there are mismatched brackets, bail out
-                                        | false when layouts.Length > 1 -> Some (spaceListL (List.rev ((wordL (replaceEscapedBrackets(txt))::layouts))))
-                                        | false -> Some (wordL (replaceEscapedBrackets(txt)))
+                                        | false when layouts.Length > 1 -> Some (spaceListL (List.rev ((wordL (tagText(replaceEscapedBrackets(txt))) :: layouts))))
+                                        | false -> Some (wordL (tagText(replaceEscapedBrackets(txt))))
                                       | true ->
                                         // we have a hit on a property reference
                                         let preText = replaceEscapedBrackets(m.Groups.["pre"].Value) // everything before the first opening bracket
@@ -865,7 +905,7 @@ namespace Microsoft.FSharp.Text.StructuredFormat
                                         let prop = replaceEscapedBrackets(m.Groups.["prop"].Value) // Unescape everything between the opening and closing brackets
 
                                         match catchExn (fun () -> getProperty ty x prop) with
-                                          | Choice2Of2 e -> Some (wordL ("<StructuredFormatDisplay exception: " + e.Message + ">"))
+                                          | Choice2Of2 e -> Some (wordL (tagText("<StructuredFormatDisplay exception: " + e.Message + ">")))
                                           | Choice1Of2 alternativeObj ->
                                               try 
                                                   let alternativeObjL = 
@@ -880,10 +920,10 @@ namespace Microsoft.FSharp.Text.StructuredFormat
                                                         //    type BigInt(signInt:int, v : BigNat) =
                                                         //        member x.StructuredDisplayString = x.ToString()
                                                         //
-                                                        | :? string as s -> sepL s
+                                                        | :? string as s -> sepL (tagText s)
                                                         | _ -> 
                                                           // recursing like this can be expensive, so let's throttle it severely
-                                                          sameObjL (depthLim/10) Precedence.BracketIfTuple alternativeObj
+                                                          sameObjL (depthLim/10) Precedence.BracketIfTuple (alternativeObj, alternativeObj.GetType())
                                                   countNodes 0 // 0 means we do not count the preText and postText 
 
                                                   let postTextMatch = System.Text.RegularExpressions.Regex.Match(postText, messageRegexPattern)
@@ -893,7 +933,7 @@ namespace Microsoft.FSharp.Text.StructuredFormat
                                                       | false -> postText 
                                                       | true -> postTextMatch.Groups.["pre"].Value
 
-                                                  let newLayouts = (sepL preText ^^ alternativeObjL ^^ sepL currentPostText)::layouts
+                                                  let newLayouts = (sepL (tagText preText) ^^ alternativeObjL ^^ sepL (tagText currentPostText)) :: layouts
                                                   match postText with
                                                     | "" ->
                                                       //We are done, build a space-delimited layout from the collection of layouts we've accumulated
@@ -916,24 +956,21 @@ namespace Microsoft.FSharp.Text.StructuredFormat
                                                       | false ->
                                                         // We are done, there's more text but it doesn't contain any more properties, we need to remove escaped brackets now though
                                                         // since that wasn't done when creating currentPostText
-                                                        Some (spaceListL (List.rev ((sepL preText ^^ alternativeObjL ^^ sepL (replaceEscapedBrackets(remaingPropertyText)))::layouts)))
+                                                        Some (spaceListL (List.rev ((sepL (tagText preText) ^^ alternativeObjL ^^ sepL (tagText(replaceEscapedBrackets(remaingPropertyText)))) :: layouts)))
                                               with _ -> 
                                                 None
                                   // Seed with an empty layout with a space to the left for formatting purposes
-                                  buildObjMessageL txt [leftL ""] 
-#if RUNTIME
-#else
-#if COMPILER    // FSharp.Compiler.dll: This is the PrintIntercepts extensibility point currently revealed by fsi.exe's AddPrinter
+                                  buildObjMessageL txt [leftL (tagText "")] 
+#if COMPILER    // This is the PrintIntercepts extensibility point currently revealed by fsi.exe's AddPrinter
                         let res = 
                             match res with 
                             | Some _ -> res
                             | None -> 
                                 let env = { new IEnvironment with
-                                                member env.GetLayout(y) = objL (depthLim-1) Precedence.BracketIfTuple y 
+                                                member env.GetLayout(y) = objL (depthLim-1) Precedence.BracketIfTuple (y, y.GetType()) 
                                                 member env.MaxColumns = opts.PrintLength
                                                 member env.MaxRows = opts.PrintLength }
                                 opts.PrintIntercepts |> List.tryPick (fun intercept -> intercept env x)
-#endif
 #endif
                         let res = 
                             match res with 
@@ -944,31 +981,34 @@ namespace Microsoft.FSharp.Text.StructuredFormat
                 with
                   e ->
                     countNodes 1
-                    wordL ("Error: " + e.Message)
+                    wordL (tagText("Error: " + e.Message))
 
             and recdAtomicTupleL depthLim recd =
                 // tuples up args to UnionConstruction or ExceptionConstructor. no node count.
                 match recd with 
                 | [(_,x)] -> objL depthLim Precedence.BracketIfTupleOrNotAtomic x 
-                | txs     -> leftL "(" ^^ compactCommaListL (List.map (snd >> objL depthLim Precedence.BracketIfTuple) txs) ^^ rightL ")" 
+                | txs     -> leftL Literals.leftParen ^^ commaListL (List.map (snd >> objL depthLim Precedence.BracketIfTuple) txs) ^^ rightL Literals.rightParen
 
             and bracketIfL b basicL =
-                if b then (leftL "(") ^^ basicL ^^ (rightL ")") else basicL
+                if b then (leftL Literals.leftParen) ^^ basicL ^^ (rightL Literals.rightParen) else basicL
 
             and reprL showMode depthLim prec repr x (* x could be null *) =
                 let showModeFilter lay = match showMode with ShowAll -> lay | ShowTopLevelBinding -> emptyL                                                             
-                match repr with 
-                | TupleValue vals -> 
-                    let basicL = sepListL (rightL ",") (List.map (objL depthLim Precedence.BracketIfTuple ) vals)
-                    bracketIfL (prec <= Precedence.BracketIfTuple) basicL 
+                match repr with
+                | TupleValue (tupleType, vals) ->
+                    let basicL = sepListL (rightL Literals.comma) (List.map (objL depthLim Precedence.BracketIfTuple ) vals)
+                    let fields = bracketIfL (prec <= Precedence.BracketIfTuple) basicL
+                    match tupleType with
+                    | TupleType.Value -> structL ^^ fields
+                    | TupleType.Reference -> fields
 
                 | RecordValue items -> 
-                    let itemL (name,x) =
+                    let itemL (name,x,ty) =
                       countNodes 1 // record labels are counted as nodes. [REVIEW: discussion under 4090].
-                      (name,objL depthLim Precedence.BracketIfTuple x)
+                      (tagRecordField name,objL depthLim Precedence.BracketIfTuple (x, ty))
                     makeRecordL (List.map itemL items)
 
-                | ConstructorValue (constr,recd) when // x is List<T>. Note: "null" is never a valid list value. 
+                | ConstructorValue (_,constr,recd) when // x is List<T>. Note: "null" is never a valid list value. 
                                                       x<>null && isListType (x.GetType()) ->
                     match constr with 
                     | "Cons" -> 
@@ -978,31 +1018,40 @@ namespace Microsoft.FSharp.Text.StructuredFormat
                         makeListL itemLs
                     | _ ->
                         countNodes 1
-                        wordL "[]" 
+                        wordL (tagPunctuation "[]")
 
-                | ConstructorValue(nm,[])   ->
+                | ConstructorValue(declaringType,nm,recd)   ->
                     countNodes 1
-                    (wordL nm)
-
-                | ConstructorValue(nm,recd) ->
-                    countNodes 1 // e.g. Some (Some (Some (Some 2))) should count for 5 
-                    (wordL nm --- recdAtomicTupleL depthLim recd) |> bracketIfL (prec <= Precedence.BracketIfTupleOrNotAtomic)
+                    let caseName =
+                        match declaringType with
+                        | None ->
+                            wordL (tagMethod nm)
+                        | Some declaringType ->
+                            wordL (tagClass declaringType.Name) ^^ sepL (tagPunctuation ".") ^^ wordL (tagMethod nm)
+                    match recd with
+                    | [] -> caseName
+                    | recd -> (caseName --- recdAtomicTupleL depthLim recd) |> bracketIfL (prec <= Precedence.BracketIfTupleOrNotAtomic)
 
                 | ExceptionValue(ty,recd) ->
                     countNodes 1
                     let name = ty.Name 
                     match recd with
-                      | []   -> (wordL name)
-                      | recd -> (wordL name --- recdAtomicTupleL depthLim recd) |> bracketIfL (prec <= Precedence.BracketIfTupleOrNotAtomic)
+                      | []   -> (wordL (tagClass name))
+                      | recd -> (wordL (tagClass name) --- recdAtomicTupleL depthLim recd) |> bracketIfL (prec <= Precedence.BracketIfTupleOrNotAtomic)
 
                 | FunctionClosureValue ty ->
                     // Q: should function printing include the ty.Name? It does not convey much useful info to most users, e.g. "clo@0_123".    
                     countNodes 1
-                    wordL ("<fun:"+ty.Name+">") |> showModeFilter
+                    wordL (tagText("<fun:"+ty.Name+">")) |> showModeFilter
 
                 | ObjectValue(obj)  ->
                     match obj with 
-                    | null -> (countNodes 1; nullL)
+                    | null ->
+                        countNodes 1
+                        // If this is the root element, wrap the null with angle brackets
+                        if depthLim = opts.PrintDepth - 1 then
+                            wordL (tagText "<null>")
+                        else nullL
                     | _ -> 
                     let ty = obj.GetType()
                     match obj with 
@@ -1011,24 +1060,25 @@ namespace Microsoft.FSharp.Text.StructuredFormat
 #if COMPILER  
                         if s.Length + 2(*quotes*) <= opts.StringLimit then
                            // With the quotes, it fits within the limit.
-                           wordL (formatString s)
+                           wordL (tagStringLiteral(formatString s))
                         else
                            // When a string is considered too long to print, there is a choice: what to print?
                            // a) <string>            -- follows <fun:typename>
                            // b) <string:length>     -- follows <fun:typename> and gives just the length
                            // c) "abcdefg"+[n chars] -- gives a prefix and the remaining chars
-                           wordL (formatStringInWidth opts.StringLimit s)
+                           wordL (tagStringLiteral(formatStringInWidth opts.StringLimit s))
 #else
-                        wordL (formatString s)  
+                        wordL (tagStringLiteral (formatString s))  
 #endif                        
                     | :? Array as arr -> 
+                        let ty = arr.GetType().GetElementType()
                         match arr.Rank with
                         | 1 -> 
                              let n = arr.Length
                              let b1 = arr.GetLowerBound(0) 
-                             let project depthLim = if depthLim=(b1+n) then None else Some (box (arr.GetValue(depthLim)),depthLim+1)
+                             let project depthLim = if depthLim=(b1+n) then None else Some ((box (arr.GetValue(depthLim)), ty),depthLim+1)
                              let itemLs = boundedUnfoldL (objL depthLim Precedence.BracketIfTuple) project stopShort b1 opts.PrintLength
-                             makeArrayL (if b1 = 0 then itemLs else wordL("bound1="+string_of_int b1)::itemLs)
+                             makeArrayL (if b1 = 0 then itemLs else wordL (tagText("bound1="+string_of_int b1)) :: itemLs)
                         | 2 -> 
                              let n1 = arr.GetLength(0)
                              let n2 = arr.GetLength(1)
@@ -1036,13 +1086,13 @@ namespace Microsoft.FSharp.Text.StructuredFormat
                              let b2 = arr.GetLowerBound(1) 
                              let project2 x y =
                                if x>=(b1+n1) || y>=(b2+n2) then None
-                               else Some (box (arr.GetValue(x,y)),y+1)
+                               else Some ((box (arr.GetValue(x,y)), ty),y+1)
                              let rowL x = boundedUnfoldL (objL depthLim Precedence.BracketIfTuple) (project2 x) stopShort b2 opts.PrintLength |> makeListL
                              let project1 x = if x>=(b1+n1) then None else Some (x,x+1)
                              let rowsL  = boundedUnfoldL rowL project1 stopShort b1 opts.PrintLength
-                             makeArray2L (if b1=0 && b2 = 0 then rowsL else wordL("bound1=" + string_of_int b1)::wordL("bound2=" + string_of_int b2)::rowsL)
+                             makeArray2L (if b1=0 && b2 = 0 then rowsL else wordL (tagText("bound1=" + string_of_int b1)) :: wordL(tagText("bound2=" + string_of_int b2)) :: rowsL)
                           | n -> 
-                             makeArrayL [wordL("rank=" + string_of_int n)]
+                             makeArrayL [wordL (tagText("rank=" + string_of_int n))]
                         
                     // Format 'set' and 'map' nicely
                     | _ when  
@@ -1055,14 +1105,14 @@ namespace Microsoft.FSharp.Text.StructuredFormat
                                 (match v with null -> false | _ -> true) && 
                                 tyv.IsGenericType && 
                                 tyv.GetGenericTypeDefinition() = typedefof<KeyValuePair<int,int>> then
-                                  objL depthLim Precedence.BracketIfTuple (tyv.GetProperty("Key").GetValue(v, [| |]), 
-                                                                           tyv.GetProperty("Value").GetValue(v, [| |]))
+                                  objL depthLim Precedence.BracketIfTuple ((tyv.GetProperty("Key").GetValue(v, [| |]), 
+                                                                            tyv.GetProperty("Value").GetValue(v, [| |])), tyv)
                              else
-                                  objL depthLim Precedence.BracketIfTuple v
+                                  objL depthLim Precedence.BracketIfTuple (v, tyv)
                          let it = (obj :?>  System.Collections.IEnumerable).GetEnumerator() 
                          try 
                            let itemLs = boundedUnfoldL possibleKeyValueL (fun () -> if it.MoveNext() then Some(it.Current,()) else None) stopShort () (1+opts.PrintLength/12)
-                           (wordL word --- makeListL itemLs) |> bracketIfL (prec <= Precedence.BracketIfTupleOrNotAtomic)
+                           (wordL (tagClass word) --- makeListL itemLs) |> bracketIfL (prec <= Precedence.BracketIfTupleOrNotAtomic)
                          finally 
                             match it with 
                             | :? System.IDisposable as e -> e.Dispose()
@@ -1076,9 +1126,11 @@ namespace Microsoft.FSharp.Text.StructuredFormat
                          if showContent then
                            let word = "seq"
                            let it = ie.GetEnumerator() 
+                           let ty = ie.GetType().GetInterfaces() |> Array.filter (fun ty -> ty.IsGenericType && ty.Name = "IEnumerable`1") |> Array.tryItem 0
+                           let ty = Option.map (fun (ty:Type) -> ty.GetGenericArguments().[0]) ty
                            try 
-                             let itemLs = boundedUnfoldL (objL depthLim Precedence.BracketIfTuple) (fun () -> if it.MoveNext() then Some(it.Current,()) else None) stopShort () (1+opts.PrintLength/30)
-                             (wordL word --- makeListL itemLs) |> bracketIfL (prec <= Precedence.BracketIfTupleOrNotAtomic)
+                             let itemLs = boundedUnfoldL (objL depthLim Precedence.BracketIfTuple) (fun () -> if it.MoveNext() then Some((it.Current, match ty with | None -> it.Current.GetType() | Some ty -> ty),()) else None) stopShort () (1+opts.PrintLength/30)
+                             (wordL (tagClass word) --- makeListL itemLs) |> bracketIfL (prec <= Precedence.BracketIfTupleOrNotAtomic)
                            finally 
                               match it with 
                               | :? System.IDisposable as e -> e.Dispose()
@@ -1088,7 +1140,7 @@ namespace Microsoft.FSharp.Text.StructuredFormat
                            // Sequence printing is turned off for declared-values, and maybe be disabled to users.
                            // There is choice here, what to print? <seq> or ... or ?
                            // Also, in the declared values case, if the sequence is actually a known non-lazy type (list, array etc etc) we could print it.  
-                           wordL "<seq>" |> showModeFilter
+                           wordL (tagText "<seq>") |> showModeFilter
                     | _ ->
                          if showMode = ShowTopLevelBinding && typeUsesSystemObjectToString ty then
                            emptyL
@@ -1098,11 +1150,7 @@ namespace Microsoft.FSharp.Text.StructuredFormat
                                                             // If the leafFormatter was directly here, then layout leaves could store strings.
                            match obj with 
                            | _ when opts.ShowProperties ->
-#if FX_ATLEAST_PORTABLE
-                              let props = ty.GetProperties(BindingFlags.Instance ||| BindingFlags.Public)
-#else                           
                               let props = ty.GetProperties(BindingFlags.GetField ||| BindingFlags.Instance ||| BindingFlags.Public)
-#endif                              
                               let fields = ty.GetFields(BindingFlags.Instance ||| BindingFlags.Public) |> Array.map (fun i -> i :> MemberInfo)
                               let propsAndFields = 
                                 props |> Array.map (fun i -> i :> MemberInfo)
@@ -1117,27 +1165,27 @@ namespace Microsoft.FSharp.Text.StructuredFormat
 
                               // massively reign in deep printing of properties 
                               let nDepth = depthLim/10
-#if FX_ATLEAST_PORTABLE
-                              Array.Sort((propsAndFields),{ new IComparer<MemberInfo> with member this.Compare(p1,p2) = compare (p1.Name) (p2.Name) } );
-#else                              
-                              Array.Sort((propsAndFields :> Array),{ new System.Collections.IComparer with member this.Compare(p1,p2) = compare ((p1 :?> MemberInfo).Name) ((p2 :?> MemberInfo).Name) } );
-#endif                        
+#if NETSTANDARD
+                              Array.Sort((propsAndFields),{ new IComparer<MemberInfo> with member this.Compare(p1,p2) = compare (p1.Name) (p2.Name) } )
+#else
+                              Array.Sort((propsAndFields :> Array),{ new System.Collections.IComparer with member this.Compare(p1,p2) = compare ((p1 :?> MemberInfo).Name) ((p2 :?> MemberInfo).Name) } )
+#endif
 
                               if propsAndFields.Length = 0 || (nDepth <= 0) then basicL 
                               else basicL --- 
                                      (propsAndFields 
                                       |> Array.map 
                                         (fun m -> 
-                                            (m.Name,
-                                                (try Some (objL nDepth Precedence.BracketIfTuple (getProperty ty obj m.Name)) 
-                                                 with _ -> try Some (objL nDepth Precedence.BracketIfTuple (getField obj (m :?> FieldInfo))) 
+                                            ((if m :? FieldInfo then tagField m.Name else tagProperty m.Name),
+                                                (try Some (objL nDepth Precedence.BracketIfTuple ((getProperty ty obj m.Name), ty)) 
+                                                 with _ -> try Some (objL nDepth Precedence.BracketIfTuple ((getField obj (m :?> FieldInfo)), ty)) 
                                                            with _ -> None)))
                                       |> Array.toList 
                                       |> makePropertiesL)
                            | _ -> basicL 
                 | UnitValue -> countNodes 1; measureL
 
-            polyL bindingFlags objWithReprL showMode opts.PrintDepth Precedence.BracketIfTuple x
+            polyL bindingFlags objWithReprL showMode opts.PrintDepth Precedence.BracketIfTuple (x, ty)
 
         // --------------------------------------------------------------------
         // pprinter: leafFormatter
@@ -1145,47 +1193,54 @@ namespace Microsoft.FSharp.Text.StructuredFormat
 
         let leafFormatter (opts:FormatOptions) (obj :obj) =
             match obj with 
-            | null -> "null"
+            | null -> tagKeyword "null"
             | :? double as d -> 
                 let s = d.ToString(opts.FloatingPointFormat,opts.FormatProvider)
-                if System.Double.IsNaN(d) then "nan"
-                elif System.Double.IsNegativeInfinity(d) then "-infinity"
-                elif System.Double.IsPositiveInfinity(d) then "infinity"
-                elif opts.FloatingPointFormat.[0] = 'g'  && String.forall(fun c -> System.Char.IsDigit(c) || c = '-')  s
-                then s + ".0" 
-                else s
+                let t = 
+                    if System.Double.IsNaN(d) then "nan"
+                    elif System.Double.IsNegativeInfinity(d) then "-infinity"
+                    elif System.Double.IsPositiveInfinity(d) then "infinity"
+                    elif opts.FloatingPointFormat.[0] = 'g'  && String.forall(fun c -> System.Char.IsDigit(c) || c = '-')  s
+                    then s + ".0" 
+                    else s
+                tagNumericLiteral t
             | :? single as d -> 
-                (if System.Single.IsNaN(d) then "nan"
-                 elif System.Single.IsNegativeInfinity(d) then "-infinity"
-                 elif System.Single.IsPositiveInfinity(d) then "infinity"
-                 elif opts.FloatingPointFormat.Length >= 1 && opts.FloatingPointFormat.[0] = 'g' 
-                  && float32(System.Int32.MinValue) < d && d < float32(System.Int32.MaxValue) 
-                  && float32(int32(d)) = d 
-                 then (System.Convert.ToInt32 d).ToString(opts.FormatProvider) + ".0"
-                 else d.ToString(opts.FloatingPointFormat,opts.FormatProvider)) 
-                + "f"
-            | :? System.Decimal as d -> d.ToString("g",opts.FormatProvider) + "M"
-            | :? uint64 as d -> d.ToString(opts.FormatProvider) + "UL"
-            | :? int64  as d -> d.ToString(opts.FormatProvider) + "L"
-            | :? int32  as d -> d.ToString(opts.FormatProvider)
-            | :? uint32 as d -> d.ToString(opts.FormatProvider) + "u"
-            | :? int16  as d -> d.ToString(opts.FormatProvider) + "s"
-            | :? uint16 as d -> d.ToString(opts.FormatProvider) + "us"
-            | :? sbyte  as d -> d.ToString(opts.FormatProvider) + "y"
-            | :? byte   as d -> d.ToString(opts.FormatProvider) + "uy"
-            | :? nativeint as d -> d.ToString() + "n"
-            | :? unativeint  as d -> d.ToString() + "un"
-            | :? bool   as b -> (if b then "true" else "false")
-            | :? char   as c -> "\'" + formatChar true c + "\'"
-            | _ -> try 
+                let t =
+                    (if System.Single.IsNaN(d) then "nan"
+                     elif System.Single.IsNegativeInfinity(d) then "-infinity"
+                     elif System.Single.IsPositiveInfinity(d) then "infinity"
+                     elif opts.FloatingPointFormat.Length >= 1 && opts.FloatingPointFormat.[0] = 'g' 
+                      && float32(System.Int32.MinValue) < d && d < float32(System.Int32.MaxValue) 
+                      && float32(int32(d)) = d 
+                     then (System.Convert.ToInt32 d).ToString(opts.FormatProvider) + ".0"
+                     else d.ToString(opts.FloatingPointFormat,opts.FormatProvider)) 
+                    + "f"
+                tagNumericLiteral t
+            | :? System.Decimal as d -> d.ToString("g",opts.FormatProvider) + "M" |> tagNumericLiteral
+            | :? uint64 as d -> d.ToString(opts.FormatProvider) + "UL" |> tagNumericLiteral
+            | :? int64  as d -> d.ToString(opts.FormatProvider) + "L" |> tagNumericLiteral
+            | :? int32  as d -> d.ToString(opts.FormatProvider) |> tagNumericLiteral
+            | :? uint32 as d -> d.ToString(opts.FormatProvider) + "u" |> tagNumericLiteral
+            | :? int16  as d -> d.ToString(opts.FormatProvider) + "s" |> tagNumericLiteral
+            | :? uint16 as d -> d.ToString(opts.FormatProvider) + "us" |> tagNumericLiteral
+            | :? sbyte  as d -> d.ToString(opts.FormatProvider) + "y" |> tagNumericLiteral
+            | :? byte   as d -> d.ToString(opts.FormatProvider) + "uy" |> tagNumericLiteral
+            | :? nativeint as d -> d.ToString() + "n" |> tagNumericLiteral
+            | :? unativeint  as d -> d.ToString() + "un" |> tagNumericLiteral
+            | :? bool   as b -> (if b then "true" else "false") |> tagKeyword
+            | :? char   as c -> "\'" + formatChar true c + "\'" |> tagStringLiteral
+            | _ -> 
+                let t = 
+                    try 
                         let text = obj.ToString()
                         match text with
                         | null -> ""
                         | _ -> text
-                   with e ->
+                    with e ->
                      // If a .ToString() call throws an exception, catch it and use the message as the result.
                      // This may be informative, e.g. division by zero etc...
                      "<ToString exception: " + e.Message + ">" 
+                tagText t
 
         let any_to_layout opts x = anyL ShowAll BindingFlags.Public opts x
 
@@ -1196,33 +1251,36 @@ namespace Microsoft.FSharp.Text.StructuredFormat
             else 
                 l |> squashTo (opts.PrintWidth,leafFormatter opts)
 
-        let output_layout opts oc l = 
+        let asTaggedTextWriter (tw: TextWriter) =
+            { new TaggedTextWriter with
+                member __.Write(t) = tw.Write t.Text
+                member __.WriteLine() = tw.WriteLine() }
+
+        let output_layout_tagged opts oc l = 
             l |> squash_layout opts 
               |> outL opts.AttributeProcessor (leafFormatter opts) oc
 
-        let layout_to_string opts l = 
-            l |> squash_layout opts 
-              |> showL opts (leafFormatter opts) 
+        let output_layout opts oc l = 
+            output_layout_tagged opts (asTaggedTextWriter oc) l
+
+        let layout_to_string options layout = 
+            layout |> squash_layout options 
+              |> showL options ((leafFormatter options) >> toText)
 
         let output_any_ex opts oc x = x |> any_to_layout opts |> output_layout opts oc
 
-        let output_any oc x = output_any_ex FormatOptions.Default oc x
+        let output_any writer x = output_any_ex FormatOptions.Default writer x
 
         let layout_as_string opts x = x |> any_to_layout opts |> layout_to_string opts
 
         let any_to_string x = layout_as_string FormatOptions.Default x
 
-#if RUNTIME
-#if FX_RESHAPED_REFLECTION
-        let internal anyToStringForPrintf opts (showNonPublicMembers : bool) x = 
-            let bindingFlags = ReflectionUtils.toBindingFlags showNonPublicMembers
-#else
-        let internal anyToStringForPrintf opts (bindingFlags:BindingFlags) x = 
-#endif
-            x |> anyL ShowAll bindingFlags opts |> layout_to_string opts
-#endif
-
 #if COMPILER
         /// Called 
-        let fsi_any_to_layout opts x = anyL ShowTopLevelBinding BindingFlags.Public opts x 
-#endif  
+        let fsi_any_to_layout opts x = anyL ShowTopLevelBinding BindingFlags.Public opts x
+#else
+// FSharp.Core
+        let internal anyToStringForPrintf options (bindingFlags:BindingFlags) x = 
+            x |> anyL ShowAll bindingFlags options |> layout_to_string options
+#endif
+

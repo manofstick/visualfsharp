@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
 using System.Diagnostics.CodeAnalysis;
 
@@ -160,7 +160,7 @@ using System.Diagnostics.CodeAnalysis;
 [assembly: SuppressMessage("Microsoft.Design", "CA1051:DoNotDeclareVisibleInstanceFields", Scope = "member", Target = "Microsoft.VisualStudio.Package.ProjectOptions.#BugReportFileName", MessageId = "")]
 [assembly: SuppressMessage("Microsoft.Design", "CA1051:DoNotDeclareVisibleInstanceFields", Scope = "member", Target = "Microsoft.VisualStudio.Package.ProjectOptions.#CheckedArithmetic", MessageId = "")]
 [assembly: SuppressMessage("Microsoft.Design", "CA1051:DoNotDeclareVisibleInstanceFields", Scope = "member", Target = "Microsoft.VisualStudio.Package.ProjectOptions.#CodePage", MessageId = "")]
-[assembly: SuppressMessage("Microsoft.Design", "CA1051:DoNotDeclareVisibleInstanceFields", Scope = "member", Target = "Microsoft.VisualStudio.Package.ProjectOptions.#CompileAndExecute", MessageId = "")]
+[assembly: SuppressMessage("Microsoft.Design", "CA1051:DoNotDeclareVisibleInstanceFields", Scope = "member", Target = "Microsoft.VisualStudio.Package.ProjectOptions.#CompilationAndEvaluation", MessageId = "")]
 [assembly: SuppressMessage("Microsoft.Design", "CA1051:DoNotDeclareVisibleInstanceFields", Scope = "member", Target = "Microsoft.VisualStudio.Package.ProjectOptions.#DefinedPreProcessorSymbols", MessageId = "")]
 [assembly: SuppressMessage("Microsoft.Design", "CA1051:DoNotDeclareVisibleInstanceFields", Scope = "member", Target = "Microsoft.VisualStudio.Package.ProjectOptions.#DisplayCommandLineHelp", MessageId = "")]
 [assembly: SuppressMessage("Microsoft.Design", "CA1051:DoNotDeclareVisibleInstanceFields", Scope = "member", Target = "Microsoft.VisualStudio.Package.ProjectOptions.#EmitManifest", MessageId = "")]
@@ -306,3 +306,5 @@ using System.Diagnostics.CodeAnalysis;
 [assembly: SuppressMessage("Microsoft.Globalization", "CA1307:SpecifyStringComparison", Scope = "member", Target = "Microsoft.VisualStudio.Package.Web.WAUtilities.#MakeRelativePath(System.String,System.String)", MessageId = "System.String.StartsWith(System.String)")]
 [assembly: SuppressMessage("Microsoft.Naming", "CA1701:ResourceStringCompoundWordsShouldBeCasedCorrectly", Scope = "resource", Target = "Microsoft.VisualStudio.Package.Project.resources", MessageId = "dataset")]
 [assembly: SuppressMessage("Microsoft.Naming", "CA1703:ResourceStringsShouldBeSpelledCorrectly", Scope = "resource", Target = "Microsoft.VisualStudio.Package.Project.resources", MessageId = "msbuild")]
+
+[assembly: SuppressMessage("Reliability", "VSSDK006:Check services exist")]

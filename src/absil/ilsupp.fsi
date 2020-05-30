@@ -1,19 +1,17 @@
-// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
 /// Functions associated with writing binaries which 
 /// vary between supported implementations of the CLI Common Language 
 /// Runtime, e.g. between the SSCLI, Mono and the Microsoft CLR.
 ///
 /// The implementation of the functions can be found in ilsupp-*.fs
-module internal Microsoft.FSharp.Compiler.AbstractIL.Internal.Support
+module internal FSharp.Compiler.AbstractIL.Internal.Support
 
-#if FX_NO_PDB_WRITER
-#else
+#if !FX_NO_PDB_WRITER
 type PdbWriter
 val pdbInitialize : string -> string -> PdbWriter
 #endif
-#if FX_NO_PDB_READER
-#else
+#if !FX_NO_PDB_READER
 type PdbReader
 val pdbReadClose: PdbReader -> unit
 #endif
@@ -27,29 +25,20 @@ open System.Runtime.InteropServices
 open System.Diagnostics.SymbolStore
 #endif
 open Internal.Utilities
-open Microsoft.FSharp.Compiler.AbstractIL
-open Microsoft.FSharp.Compiler.AbstractIL.Internal
-open Microsoft.FSharp.Compiler.AbstractIL.IL 
+open FSharp.Compiler.AbstractIL
+open FSharp.Compiler.AbstractIL.Internal
+open FSharp.Compiler.AbstractIL.IL 
 
-#if FX_NO_LINKEDRESOURCES
-#else
 type IStream = System.Runtime.InteropServices.ComTypes.IStream
-#endif
 
 /// Unmanaged resource file linker - for native resources (not managed ones).
 /// The function may be called twice, once with a zero-RVA and
 /// arbitrary buffer, and once with the real buffer.  The size of the
 /// required buffer is returned.
-type PEFileType = X86 | X64
-
-#if FX_NO_LINKEDRESOURCES
-#else
-val linkNativeResources: unlinkedResources:byte[] list ->  rva:int32 -> PEFileType -> tempFilePath:string -> byte[]
+val linkNativeResources: unlinkedResources:byte[] list ->  rva:int32 -> byte[]
 val unlinkResource: int32 -> byte[] -> byte[]
-#endif
 
-#if FX_NO_PDB_WRITER
-#else
+#if !FX_NO_PDB_WRITER
 /// PDB reader and associated types
 type PdbDocument
 type PdbMethod
@@ -78,7 +67,6 @@ val pdbDocumentGetLanguageVendor: PdbDocument -> byte[] (* guid *)
 val pdbDocumentFindClosestLine: PdbDocument -> int -> int
 
 val pdbMethodGetToken: PdbMethod -> int32
-val pdbMethodGetRootScope: PdbMethod ->  PdbMethodScope
 val pdbMethodGetSequencePoints: PdbMethod -> PdbSequencePoint array
 
 val pdbScopeGetChildren: PdbMethodScope -> PdbMethodScope array
@@ -90,8 +78,7 @@ val pdbVariableGetSignature: PdbVariable -> byte[]
 val pdbVariableGetAddressAttributes: PdbVariable -> int32 (* kind *) * int32 (* addrField1 *)
 #endif
 
-#if FX_NO_PDB_WRITER
-#else
+#if !FX_NO_PDB_WRITER
 //---------------------------------------------------------------------
 // PDB writer.
 //---------------------------------------------------------------------

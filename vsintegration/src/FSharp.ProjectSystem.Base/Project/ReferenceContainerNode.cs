@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
 using System;
 using System.Runtime.InteropServices;
@@ -371,7 +371,11 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
                 }
             }
 
-            BuildResult buildResult = this.ProjectMgr.Build(MsBuildTarget.ResolveAssemblyReferences);
+            var extraProperties = new KeyValuePair<string, string>[]
+            {
+                new KeyValuePair<string, string>("DesignTimeBuild", "true"),
+            }.AsEnumerable();
+            BuildResult buildResult = this.ProjectMgr.BuildWithExtraProperties(MsBuildTarget.ResolveAssemblyReferences, extraProperties);
             foreach (string referenceType in SupportedReferenceTypes)
             {
                 bool isAssemblyReference = referenceType == ProjectFileConstants.Reference;

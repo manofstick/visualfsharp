@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
 using System;
 using Microsoft.VisualStudio.Shell.Interop;
@@ -12,7 +12,6 @@ using IServiceProvider = System.IServiceProvider;
 using Microsoft.VisualStudio.OLE.Interop;
 using EnvDTE;
 using Microsoft.VisualStudio.FSharp.ProjectSystem;
-using Microsoft.VisualStudio.FSharp.LanguageService;
 
 
 namespace Microsoft.VisualStudio.FSharp.ProjectSystem.Automation
@@ -350,7 +349,7 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem.Automation
                 extensibility.EnterAutomationFunction();
                 try
                 {
-                    this.node.Remove(false);
+                    this.node.Remove(removeFromStorage: false);
                 }
                 finally
                 {
@@ -381,7 +380,7 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem.Automation
 
                 try
                 {
-                    this.node.Remove(true);
+                    this.node.Remove(removeFromStorage: true, promptSave: false);
                 }
                 finally
                 {

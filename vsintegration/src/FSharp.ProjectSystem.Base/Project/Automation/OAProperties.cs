@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
 using System;
 using Microsoft.VisualStudio.Shell.Interop;
@@ -14,7 +14,6 @@ using Microsoft.VisualStudio.OLE.Interop;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Microsoft.VisualStudio.FSharp.ProjectSystem;
-using Microsoft.VisualStudio.FSharp.LanguageService;
 
 namespace Microsoft.VisualStudio.FSharp.ProjectSystem.Automation
 {

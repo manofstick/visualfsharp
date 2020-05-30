@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
 namespace Microsoft.FSharp.NativeInterop
 
@@ -18,6 +18,22 @@ namespace Microsoft.FSharp.NativeInterop
         /// <param name="address">The pointer address.</param>
         /// <returns>A typed pointer.</returns>
         val inline ofNativeInt : address:nativeint -> nativeptr<'T>
+
+        [<Unverifiable>]
+        [<NoDynamicInvocation>]
+        [<CompiledName("ToVoidPtrInlined")>]
+        /// <summary>Returns an untyped native pointer for a given typed pointer.</summary>
+        /// <param name="address">The pointer address.</param>
+        /// <returns>A typed pointer.</returns>
+        val inline toVoidPtr : address:nativeptr<'T> -> voidptr
+
+        [<Unverifiable>]
+        [<NoDynamicInvocation>]
+        [<CompiledName("OfVoidPtrInlined")>]
+        /// <summary>Returns a typed native pointer for a untyped native pointer.</summary>
+        /// <param name="address">The untyped pointer.</param>
+        /// <returns>A typed pointer.</returns>
+        val inline ofVoidPtr : voidptr -> nativeptr<'T>
 
         [<Unverifiable>]
         [<NoDynamicInvocation>]
@@ -81,3 +97,11 @@ namespace Microsoft.FSharp.NativeInterop
         [<NoDynamicInvocation>]
         [<CompiledName("StackAllocate")>]
         val inline stackalloc : count:int -> nativeptr<'T>
+
+        /// <summary>Converts a given typed native pointer to a managed pointer.</summary>
+        /// <param name="address">The input pointer.</param>
+        /// <returns>The managed pointer.</returns>
+        [<Unverifiable>]
+        [<NoDynamicInvocation>]
+        [<CompiledName("ToByRefInlined")>]
+        val inline toByRef : nativeptr<'T> -> byref<'T>        

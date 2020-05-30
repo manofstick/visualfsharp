@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
 namespace Microsoft.FSharp.Collections
 
@@ -14,7 +14,7 @@ namespace Microsoft.FSharp.Collections
     [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
     module Seq = 
 
-        /// <summary>Returns a new sequence that contains the cartesian product of the two input sequences.</summary>
+        /// <summary>Returns a new sequence that contains all pairings of elements from the first and second sequences.</summary>
         /// <param name="source1">The first sequence.</param>
         /// <param name="source2">The second sequence.</param>
         /// <returns>The result sequence.</returns>
@@ -557,6 +557,16 @@ namespace Microsoft.FSharp.Collections
         /// <exception cref="System.ArgumentException">Thrown when the input does not have precisely one element.</exception>
         [<CompiledName("ExactlyOne")>]
         val exactlyOne: source:seq<'T> -> 'T
+
+        /// <summary>Returns the only element of the sequence or <c>None</c> if sequence is empty or contains more than one element.</summary>
+        ///
+        /// <param name="source">The input sequence.</param>
+        ///
+        /// <returns>The only element of the sequence or None.</returns>
+        ///
+        /// <exception cref="System.ArgumentNullException">Thrown when the input sequence is null.</exception>
+        [<CompiledName("TryExactlyOne")>]
+        val tryExactlyOne: source:seq<'T> -> 'T option
 
         /// <summary>Returns true if the sequence contains no elements, false otherwise.</summary>
         ///
@@ -1276,6 +1286,16 @@ namespace Microsoft.FSharp.Collections
         [<CompiledName("TryPick")>]
         val tryPick: chooser:('T -> 'U option) -> source:seq<'T> -> 'U option
 
+        /// <summary>Returns the transpose of the given sequence of sequences.</summary>
+        /// <remarks>This function returns a sequence that digests the whole initial sequence as soon as
+        /// that sequence is iterated. As a result this function should not be used with
+        /// large or infinite sequences.</remarks>
+        /// <param name="source">The input sequence.</param>
+        /// <returns>The transposed sequence.</returns>
+        /// <exception cref="System.ArgumentNullException">Thrown when the input sequence is null.</exception>
+        [<CompiledName("Transpose")>]
+        val transpose: source:seq<'Collection> -> seq<seq<'T>> when 'Collection :> seq<'T>
+
         /// <summary>Returns a sequence that when enumerated returns at most N elements.</summary>
         ///
         /// <param name="count">The maximum number of items to enumerate.</param>
@@ -1342,97 +1362,3 @@ namespace Microsoft.FSharp.Collections
         /// <exception cref="System.ArgumentNullException">Thrown when any of the input sequences is null.</exception>
         [<CompiledName("Zip3")>]
         val zip3: source1:seq<'T1> -> source2:seq<'T2> -> source3:seq<'T3> -> seq<'T1 * 'T2 * 'T3>
-
-namespace Microsoft.FSharp.Core.CompilerServices
-
-    open System
-    open System.Collections
-    open System.Collections.Generic
-    open Microsoft.FSharp.Core
-    open Microsoft.FSharp.Collections
-        
-        
-    [<RequireQualifiedAccess>]
-    /// <summary>A group of functions used as part of the compiled representation of F# sequence expressions.</summary>
-    module RuntimeHelpers = 
-
-        [<Struct; NoComparison; NoEquality>]
-        type internal StructBox<'T when 'T : equality> = 
-            new : value:'T -> StructBox<'T>
-            member Value : 'T
-            static member Comparer : IEqualityComparer<StructBox<'T>>
-
-        /// <summary>The F# compiler emits calls to this function to 
-        /// implement the <c>while</c> operator for F# sequence expressions.</summary>
-        ///
-        /// <param name="guard">A function that indicates whether iteration should continue.</param>
-        /// <param name="source">The input sequence.</param>
-        ///
-        /// <returns>The result sequence.</returns>
-        val EnumerateWhile   : guard:(unit -> bool) -> source:seq<'T> -> seq<'T>
-
-        /// <summary>The F# compiler emits calls to this function to 
-        /// implement the <c>try/finally</c> operator for F# sequence expressions.</summary>
-        ///
-        /// <param name="source">The input sequence.</param>
-        /// <param name="compensation">A computation to be included in an enumerator's Dispose method.</param>
-        ///
-        /// <returns>The result sequence.</returns>
-        val EnumerateThenFinally :  source:seq<'T> -> compensation:(unit -> unit) -> seq<'T>
-        
-        /// <summary>The F# compiler emits calls to this function to implement the compiler-intrinsic
-        /// conversions from untyped System.Collections.IEnumerable sequences to typed sequences.</summary>
-        ///
-        /// <param name="create">An initializer function.</param>
-        /// <param name="moveNext">A function to iterate and test if end of sequence is reached.</param>
-        /// <param name="current">A function to retrieve the current element.</param>
-        ///
-        /// <returns>The resulting typed sequence.</returns>
-        val EnumerateFromFunctions: create:(unit -> 'T) -> moveNext:('T -> bool) -> current:('T -> 'U) -> seq<'U>
-
-        /// <summary>The F# compiler emits calls to this function to implement the <c>use</c> operator for F# sequence
-        /// expressions.</summary>
-        ///
-        /// <param name="resource">The resource to be used and disposed.</param>
-        /// <param name="source">The input sequence.</param>
-        ///
-        /// <returns>The result sequence.</returns>
-        val EnumerateUsing : resource:'T -> source:('T -> 'Collection) -> seq<'U> when 'T :> IDisposable and 'Collection :> seq<'U>
-
-        /// <summary>Creates an anonymous event with the given handlers.</summary>
-        ///
-        /// <param name="addHandler">A function to handle adding a delegate for the event to trigger.</param>
-        /// <param name="removeHandler">A function to handle removing a delegate that the event triggers.</param>
-        /// <param name="createHandler">A function to produce the delegate type the event can trigger.</param>
-        ///
-        /// <returns>The initialized event.</returns>
-        val CreateEvent : addHandler : ('Delegate -> unit) -> removeHandler : ('Delegate -> unit) -> createHandler : ((obj -> 'Args -> unit) -> 'Delegate) -> Microsoft.FSharp.Control.IEvent<'Delegate,'Args>
-
-    [<AbstractClass>]
-    /// <summary>The F# compiler emits implementations of this type for compiled sequence expressions.</summary>
-    type GeneratedSequenceBase<'T> =
-        /// <summary>The F# compiler emits implementations of this type for compiled sequence expressions.</summary>
-        ///
-        /// <returns>A new sequence generator for the expression.</returns>
-        new : unit -> GeneratedSequenceBase<'T>
-        /// <summary>The F# compiler emits implementations of this type for compiled sequence expressions.</summary>
-        ///
-        /// <returns>A new enumerator for the sequence.</returns>
-        abstract GetFreshEnumerator : unit -> IEnumerator<'T>
-        /// <summary>The F# compiler emits implementations of this type for compiled sequence expressions.</summary>
-        ///
-        /// <param name="result">A reference to the sequence.</param>
-        ///
-        /// <returns>A 0, 1, and 2 respectively indicate Stop, Yield, and Goto conditions for the sequence generator.</returns>
-        abstract GenerateNext : result:byref<IEnumerable<'T>> -> int
-        /// <summary>The F# compiler emits implementations of this type for compiled sequence expressions.</summary>
-        abstract Close: unit -> unit
-        /// <summary>The F# compiler emits implementations of this type for compiled sequence expressions.</summary>
-        abstract CheckClose: bool
-        /// <summary>The F# compiler emits implementations of this type for compiled sequence expressions.</summary>
-        abstract LastGenerated : 'T
-        interface IEnumerable<'T> 
-        interface IEnumerable
-        interface IEnumerator<'T> 
-        interface IEnumerator 
-

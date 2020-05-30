@@ -1,18 +1,17 @@
-// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
 /// Parse "printf-style" format specifiers at compile time, producing
 /// a list of items that specify the types of the things that follow.
 ///
 /// Must be updated if the Printf runtime component is updated.
 
-module internal Microsoft.FSharp.Compiler.CheckFormatStrings
+module internal FSharp.Compiler.CheckFormatStrings
 
-open Internal.Utilities
-open Microsoft.FSharp.Compiler 
-open Microsoft.FSharp.Compiler.Tast 
-open Microsoft.FSharp.Compiler.TcGlobals
-open Microsoft.FSharp.Compiler.AbstractIL.Internal 
+open FSharp.Compiler 
+open FSharp.Compiler.NameResolution
+open FSharp.Compiler.TypedTree 
+open FSharp.Compiler.TcGlobals
 
-val ParseFormatString : Range.range -> TcGlobals -> source: string option -> fmt: string -> bty: TType -> cty: TType -> dty: TType -> (TType * TType) * Range.range list
+val ParseFormatString : Range.range -> TcGlobals -> formatStringCheckContext: FormatStringCheckContext option -> fmt: string -> bty: TType -> cty: TType -> dty: TType -> (TType * TType) * (Range.range * int) list
 
 val TryCountFormatStringArguments : m:Range.range -> g:TcGlobals -> fmt:string -> bty:TType -> cty:TType -> int option

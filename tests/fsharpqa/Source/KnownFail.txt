@@ -20,7 +20,7 @@
 # NETFX20	- NetFx2.0 installed
 # NETFX30	- NetFx3.0 installed
 # NETFX35	- NetFx3.5 installed
-# NETFX40	- NetFx4.0 installed
+#	- NetFx4.0 installed
 # FSHARPRUNTIME20 - F# Runtime 2.0 installed (Dev10)
 # OS32BIT	- OS is 32bit
 # OS64BIT	- OS is 64bit
@@ -86,7 +86,7 @@ CHK							Stress (2766.fs) -- failed
 
 # compiler/runtime unit test known failures
 
-!NETFX35					FSharp.Core.Unittests.FSharp_Core.Microsoft_FSharp_Collections.SeqModule2.SystemLinqSelectWithException -- failed
-!NETFX35					FSharp.Core.Unittests.FSharp_Core.Microsoft_FSharp_Collections.SeqModule2.SystemLinqSelectWithSideEffects -- failed
-!CURRENTUICULTURE1033		FSharp.Core.Unittests.FSharp_Core.Microsoft_FSharp_Control.AsyncModule.ContinuationsThreadingDetails.AsyncSansSyncContext -- failed
-!CURRENTUICULTURE1033		FSharp.Core.Unittests.FSharp_Core.Microsoft_FSharp_Control.AsyncModule.ContinuationsThreadingDetails.AsyncWithSyncContext -- failed
+!NETFX35					FSharp.Core.UnitTests.Collections.SeqModule2.SystemLinqSelectWithException -- failed
+!NETFX35					FSharp.Core.UnitTests.Collections.SeqModule2.SystemLinqSelectWithSideEffects -- failed
+!CURRENTUICULTURE1033		FSharp.Core.UnitTests.Control.AsyncModule.ContinuationsThreadingDetails.AsyncSansSyncContext -- failed
+!CURRENTUICULTURE1033		FSharp.Core.UnitTests.Control.AsyncModule.ContinuationsThreadingDetails.AsyncWithSyncContext -- failed

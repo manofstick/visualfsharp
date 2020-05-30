@@ -1,4 +1,4 @@
-' Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+' Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
 Imports Microsoft.VisualBasic
 Imports Microsoft.VisualStudio.Shell.Interop
@@ -14,7 +14,6 @@ Imports Microsoft.VisualStudio.Editors
 Imports OLE = Microsoft.VisualStudio.OLE.Interop
 
 Imports Shell = Microsoft.VisualStudio.Shell
-Imports Interop = Microsoft.VisualStudio.OLE.Interop
 Imports Microsoft.VisualStudio.Editors.PropertyPages
 Imports System.Runtime.InteropServices
 Imports System.ComponentModel
@@ -23,6 +22,7 @@ Imports VslangProj90
 Imports VslangProj100
 Imports System.Runtime.Versioning
 Imports Microsoft.VisualStudio.FSharp.ProjectSystem
+Imports Microsoft.VisualStudio.Shell
 
 Namespace Microsoft.VisualStudio.Editors.PropertyPages
 
@@ -49,13 +49,12 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
         Protected Const INDEX_WINDOWSCLASSLIB As Integer = 2
         Protected Const INDEX_LAST As Integer = INDEX_WINDOWSCLASSLIB
         Public Const Const_TargetFrameworkMoniker As String = "TargetFrameworkMoniker"
-        Private m_v20FSharpRedistInstalled As Boolean = False
-        Private m_v40FSharpRedistInstalled As Boolean = False
 
         Friend WithEvents TargetFramework As System.Windows.Forms.ComboBox
         Friend WithEvents TargetFrameworkLabel As System.Windows.Forms.Label
         Friend WithEvents AssemblyNameLabel As System.Windows.Forms.Label
         Friend WithEvents ResourceLabel As System.Windows.Forms.Label
+        Friend WithEvents UseStandardResourceNames As System.Windows.Forms.CheckBox
         Friend WithEvents TargetFSharpCoreVersion As System.Windows.Forms.ComboBox
         Friend WithEvents TargetFSharpCoreVersionLabel As System.Windows.Forms.Label
 
@@ -73,18 +72,6 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
             m_OutputTypeStringKeys(INDEX_WINDOWSAPP) = SR.GetString(SR.PPG_WindowsApp)
             m_OutputTypeStringKeys(INDEX_COMMANDLINEAPP) = SR.GetString(SR.PPG_CommandLineApp)
             m_OutputTypeStringKeys(INDEX_WINDOWSCLASSLIB) = SR.GetString(SR.PPG_WindowsClassLib)
-
-#If VS_VERSION_DEV14 Then
-            Dim v20FSharpRedistKey As String = "HKEY_LOCAL_MACHINE\Software\Microsoft\FSharp\4.0\Runtime\v2.0"
-            Dim v40FSharpRedistKey As String = "HKEY_LOCAL_MACHINE\Software\Microsoft\FSharp\4.0\Runtime\v4.0"
-#End If
-#If VS_VERSION_DEV15 Then
-            Dim v20FSharpRedistKey As String = "HKEY_LOCAL_MACHINE\Software\Microsoft\FSharp\4.1\Runtime\v2.0"
-            Dim v40FSharpRedistKey As String = "HKEY_LOCAL_MACHINE\Software\Microsoft\FSharp\4.1\Runtime\v4.0"
-#End If
-
-            m_v20FSharpRedistInstalled = Not (IsNothing(Microsoft.Win32.Registry.GetValue(v20FSharpRedistKey, Nothing, Nothing)))
-            m_v40FSharpRedistInstalled = Not (IsNothing(Microsoft.Win32.Registry.GetValue(v40FSharpRedistKey, Nothing, Nothing)))
 
             'Add any initialization after the InitializeComponent() call
             AddChangeHandlers()
@@ -117,16 +104,18 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
         Friend WithEvents Win32ResourceFileBrowse As System.Windows.Forms.Button
         Friend WithEvents Win32ResourceFile As System.Windows.Forms.TextBox
         Friend WithEvents TopHalfLayoutPanel As System.Windows.Forms.TableLayoutPanel
+
         <System.Diagnostics.DebuggerStepThrough()> Private Sub InitializeComponent()
             Dim resources As System.ComponentModel.ComponentResourceManager = New System.ComponentModel.ComponentResourceManager(GetType(ApplicationPropPage))
             Me.TopHalfLayoutPanel = New System.Windows.Forms.TableLayoutPanel()
             Me.AssemblyNameLabel = New System.Windows.Forms.Label()
             Me.ResourcesGroupBox = New System.Windows.Forms.GroupBox()
-            Me.ResourcesLabel = New System.Windows.Forms.Label()
-            Me.iconTableLayoutPanel = New System.Windows.Forms.TableLayoutPanel()
             Me.Win32ResourceFileBrowse = New System.Windows.Forms.Button()
-            Me.Win32ResourceFile = New System.Windows.Forms.TextBox()
+            Me.ResourcesLabel = New System.Windows.Forms.Label()
             Me.ResourceLabel = New System.Windows.Forms.Label()
+            Me.Win32ResourceFile = New System.Windows.Forms.TextBox()
+            Me.UseStandardResourceNames = New System.Windows.Forms.CheckBox()
+            Me.iconTableLayoutPanel = New System.Windows.Forms.TableLayoutPanel()
             Me.AssemblyName = New System.Windows.Forms.TextBox()
             Me.OutputTypeLabel = New System.Windows.Forms.Label()
             Me.OutputType = New System.Windows.Forms.ComboBox()
@@ -136,7 +125,6 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
             Me.TargetFSharpCoreVersionLabel = New System.Windows.Forms.Label()
             Me.TopHalfLayoutPanel.SuspendLayout()
             Me.ResourcesGroupBox.SuspendLayout()
-            Me.iconTableLayoutPanel.SuspendLayout()
             Me.SuspendLayout()
             '
             'TopHalfLayoutPanel
@@ -162,38 +150,44 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
             '
             resources.ApplyResources(Me.ResourcesGroupBox, "ResourcesGroupBox")
             Me.TopHalfLayoutPanel.SetColumnSpan(Me.ResourcesGroupBox, 2)
+            Me.ResourcesGroupBox.Controls.Add(Me.Win32ResourceFileBrowse)
             Me.ResourcesGroupBox.Controls.Add(Me.ResourcesLabel)
+            Me.ResourcesGroupBox.Controls.Add(Me.ResourceLabel)
+            Me.ResourcesGroupBox.Controls.Add(Me.Win32ResourceFile)
+            Me.ResourcesGroupBox.Controls.Add(Me.UseStandardResourceNames)
             Me.ResourcesGroupBox.Controls.Add(Me.iconTableLayoutPanel)
             Me.ResourcesGroupBox.Name = "ResourcesGroupBox"
             Me.ResourcesGroupBox.TabStop = False
-            '
-            'ResourcesLabel
-            '
-            resources.ApplyResources(Me.ResourcesLabel, "ResourcesLabel")
-            Me.ResourcesLabel.Name = "ResourcesLabel"
-            '
-            'iconTableLayoutPanel
-            '
-            resources.ApplyResources(Me.iconTableLayoutPanel, "iconTableLayoutPanel")
-            Me.iconTableLayoutPanel.Controls.Add(Me.Win32ResourceFileBrowse, 1, 8)
-            Me.iconTableLayoutPanel.Controls.Add(Me.Win32ResourceFile, 0, 8)
-            Me.iconTableLayoutPanel.Controls.Add(Me.ResourceLabel, 0, 6)
-            Me.iconTableLayoutPanel.Name = "iconTableLayoutPanel"
             '
             'Win32ResourceFileBrowse
             '
             resources.ApplyResources(Me.Win32ResourceFileBrowse, "Win32ResourceFileBrowse")
             Me.Win32ResourceFileBrowse.Name = "Win32ResourceFileBrowse"
             '
-            'Win32ResourceFile
+            'ResourcesLabel
             '
-            resources.ApplyResources(Me.Win32ResourceFile, "Win32ResourceFile")
-            Me.Win32ResourceFile.Name = "Win32ResourceFile"
+            resources.ApplyResources(Me.ResourcesLabel, "ResourcesLabel")
+            Me.ResourcesLabel.Name = "ResourcesLabel"
             '
             'ResourceLabel
             '
             resources.ApplyResources(Me.ResourceLabel, "ResourceLabel")
             Me.ResourceLabel.Name = "ResourceLabel"
+            '
+            'Win32ResourceFile
+            '
+            resources.ApplyResources(Me.Win32ResourceFile, "Win32ResourceFile")
+            Me.Win32ResourceFile.Name = "Win32ResourceFile"
+            '
+            'UseStandardResourceNames
+            '
+            resources.ApplyResources(Me.UseStandardResourceNames, "UseStandardResourceNames")
+            Me.UseStandardResourceNames.Name = "UseStandardResourceNames"
+            '
+            'iconTableLayoutPanel
+            '
+            resources.ApplyResources(Me.iconTableLayoutPanel, "iconTableLayoutPanel")
+            Me.iconTableLayoutPanel.Name = "iconTableLayoutPanel"
             '
             'AssemblyName
             '
@@ -229,9 +223,9 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
             '
             Me.TargetFSharpCoreVersion.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList
             Me.TargetFSharpCoreVersion.FormattingEnabled = True
-            Me.TargetFSharpCoreVersion.Sorted = True
             resources.ApplyResources(Me.TargetFSharpCoreVersion, "TargetFSharpCoreVersion")
             Me.TargetFSharpCoreVersion.Name = "TargetFSharpCoreVersion"
+            Me.TargetFSharpCoreVersion.Sorted = True
             '
             'TargetFSharpCoreVersionLabel
             '
@@ -248,8 +242,6 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
             Me.TopHalfLayoutPanel.PerformLayout()
             Me.ResourcesGroupBox.ResumeLayout(False)
             Me.ResourcesGroupBox.PerformLayout()
-            Me.iconTableLayoutPanel.ResumeLayout(False)
-            Me.iconTableLayoutPanel.PerformLayout()
             Me.ResumeLayout(False)
             Me.PerformLayout()
 
@@ -265,33 +257,55 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
         Protected Overrides ReadOnly Property ControlData() As PropertyControlData()
             Get
                 If m_ControlData Is Nothing Then
-                    m_ControlData = New PropertyControlData() { _
-                        New PropertyControlData(VsProjPropId.VBPROJPROPID_AssemblyName, "AssemblyName", Me.AssemblyName, New Control() {Me.AssemblyNameLabel}), _
-                        New PropertyControlData(VsProjPropId.VBPROJPROPID_OutputType, Const_OutputType, Me.OutputType, AddressOf Me.OutputTypeSet, AddressOf Me.OutputTypeGet, ControlDataFlags.UserHandledEvents, New Control() {Me.OutputTypeLabel}), _
-                        New PropertyControlData(VsProjPropId80.VBPROJPROPID_Win32ResourceFile, "Win32ResourceFile", Me.Win32ResourceFile, AddressOf Me.Win32ResourceSet, AddressOf Me.Win32ResourceGet, ControlDataFlags.None, New Control() {Me.Win32ResourceFileBrowse}), _
-                        New PropertyControlData( _
-                            VsProjPropId100.VBPROJPROPID_TargetFrameworkMoniker, Const_TargetFrameworkMoniker, _
-                            TargetFramework, _
-                            AddressOf SetTargetFramework, AddressOf GetTargetFramework, _
-                            ControlDataFlags.ProjectMayBeReloadedDuringPropertySet Or ControlDataFlags.NoOptimisticFileCheckout, _
-                            New Control() {Me.TargetFrameworkLabel}), _
-                        New PropertyControlData( _
-                            VsProjPropId100.VBPROJPROPID_TargetFrameworkMoniker + 100, ProjectFileConstants.TargetFSharpCoreVersion, _
-                            Me.TargetFSharpCoreVersion, _
-                            AddressOf SetTargetFSharpCore, AddressOf GetTargetFSharpCore, _
-                            ControlDataFlags.ProjectMayBeReloadedDuringPropertySet Or ControlDataFlags.NoOptimisticFileCheckout, _
-                            New Control() {Me.TargetFSharpCoreVersionLabel}) _
+                    m_ControlData = New PropertyControlData() {
+                        New PropertyControlData(VsProjPropId.VBPROJPROPID_AssemblyName, "AssemblyName", Me.AssemblyName, New Control() {Me.AssemblyNameLabel}),
+                        New PropertyControlData(VsProjPropId.VBPROJPROPID_OutputType, Const_OutputType, Me.OutputType, AddressOf Me.OutputTypeSet, AddressOf Me.OutputTypeGet, ControlDataFlags.UserHandledEvents, New Control() {Me.OutputTypeLabel}),
+                        New PropertyControlData(VsProjPropId80.VBPROJPROPID_Win32ResourceFile, "Win32ResourceFile", Me.Win32ResourceFile, AddressOf Me.Win32ResourceSet, AddressOf Me.Win32ResourceGet, ControlDataFlags.None, New Control() {Me.Win32ResourceFileBrowse}),
+                        New PropertyControlData(&H10000000, "UseStandardResourceNames", Me.UseStandardResourceNames, AddressOf CheckBoxSet, AddressOf CheckBoxGet),
+                        New PropertyControlData(
+                            VsProjPropId100.VBPROJPROPID_TargetFrameworkMoniker, Const_TargetFrameworkMoniker,
+                            TargetFramework,
+                            AddressOf SetTargetFramework, AddressOf GetTargetFramework,
+                            ControlDataFlags.ProjectMayBeReloadedDuringPropertySet Or ControlDataFlags.NoOptimisticFileCheckout,
+                            New Control() {Me.TargetFrameworkLabel}),
+                        New PropertyControlData(
+                            VsProjPropId100.VBPROJPROPID_TargetFrameworkMoniker + 100, ProjectFileConstants.TargetFSharpCoreVersion,
+                            Me.TargetFSharpCoreVersion,
+                            AddressOf SetTargetFSharpCore, AddressOf GetTargetFSharpCore,
+                            ControlDataFlags.ProjectMayBeReloadedDuringPropertySet Or ControlDataFlags.NoOptimisticFileCheckout,
+                            New Control() {Me.TargetFSharpCoreVersionLabel})
                         }
                 End If
                 Return m_ControlData
             End Get
         End Property
 
+        Protected Function CheckBoxSet(control As Control, prop As PropertyDescriptor, value As Object) As Boolean
+            'If PropertyControlData.IsSpecialValue(value) Then
+            '    ' Don't do anything if the value is missing or indeterminate
+            '    Return False
+            'End If
+
+            If Not TypeOf value Is Boolean Then
+                ' Don't do anything if the value isn't of the expected type
+                Return False
+            End If
+
+            CType(control, CheckBox).Checked = CBool(value)
+            Return True
+        End Function
+
+        Protected Function CheckBoxGet(control As Control, prop As PropertyDescriptor, ByRef value As Object) As Boolean
+            Dim checkBox As CheckBox = CType(control, CheckBox)
+            value = checkBox.Checked.ToString()
+            Return True
+        End Function
+
         Protected Overrides ReadOnly Property ValidationControlGroups() As Control()()
             Get
                 If m_controlGroup Is Nothing Then
-                    m_controlGroup = New Control()() { _
-                        New Control() {Win32ResourceFile, Win32ResourceFileBrowse} _
+                    m_controlGroup = New Control()() {
+                        New Control() {Win32ResourceFile, Win32ResourceFileBrowse}
                         }
                 End If
                 Return m_controlGroup
@@ -349,6 +363,9 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
                 OutputType = CType(value, VSLangProj.prjOutputType)
                 Me.OutputType.SelectedIndex = OutputType
                 PopulateControlSet(OutputType)
+
+                'Populate the target framework combobox
+                PopulateTargetFrameworkAssemblies()
             Else
                 '// We're indeterminate 
                 Me.OutputType.SelectedIndex = INDEX_INVALID
@@ -362,7 +379,6 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
         End Function
 
         Function SetIconAndWin32ResourceFile() As Boolean
-#If FX_ATLEAST_45 Then
             If Not IsCurrentProjectDotNetPortable(DTEProject) Then  ' F# Portable projects don't do resources (same with C#)
                 EnableControl(Me.Win32ResourceFile, True)
                 EnableControl(Me.Win32ResourceFileBrowse, True)
@@ -370,11 +386,6 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
             Else
                 Return False
             End If
-#Else
-            EnableControl(Me.Win32ResourceFile, True)
-            EnableControl(Me.Win32ResourceFileBrowse, True)
-            Return True
-#End If
 
         End Function
 
@@ -442,7 +453,6 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
 
             Me.OutputType.Items.Clear()
             Me.OutputType.Items.AddRange(m_OutputTypeStringKeys)
-#If FX_ATLEAST_45 Then
             If IsCurrentProjectDotNetPortable(DTEProject) Then
                 ' F# Portable projects can only be 'Library', disable selection for this dropdown
                 Me.OutputType.Enabled = False
@@ -450,10 +460,7 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
                 Me.Win32ResourceFile.Enabled = False
                 Me.Win32ResourceFileBrowse.Enabled = False
             End If
-#End If
 
-            'Populate the target framework combobox
-            PopulateTargetFrameworkAssemblies()
             ' Populate list of possible versions of FSharp.Core
             PopulateAvailableFSharpCoreVersions()
         End Sub
@@ -471,6 +478,7 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
             MyBase.PostInitPage()
 
             EnableControlSet(CType(GetControlValueNative(Const_OutputType), VSLangProj.prjOutputType))
+            Me.UseStandardResourceNames.Enabled = True
         End Sub
 
 
@@ -486,11 +494,8 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
             End If
 
             Dim OutputType As VSLangProj.prjOutputType
-
             OutputType = CType(GetControlValueNative(Const_OutputType), VSLangProj.prjOutputType)
-
             Me.EnableControlSet(OutputType)
-
 
             SetDirty(VsProjPropId.VBPROJPROPID_OutputType, False)
             SetDirty(True) 'True forces Apply
@@ -500,6 +505,10 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
 
             Me.PopulateControlSet(OutputType)
 
+            PopulateTargetFrameworkAssemblies()
+
+            SetDirty(VsProjPropId.VBPROJPROPID_OutputType, False)
+            SetDirty(True) 'True forces Apply
             SetIconAndWin32ResourceFile()
         End Sub
 
@@ -530,11 +539,11 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
                 sInitialDirectory = System.IO.Path.GetDirectoryName(sInitialDirectory)
             End If
 
-            Dim fileNames As ArrayList = Common.Utils.GetFilesViaBrowse(ServiceProvider, Me.Handle, sInitialDirectory, SR.GetString(SR.PPG_AddWin32ResourceTitle), _
-                    Common.CombineDialogFilters( _
-                        Common.CreateDialogFilter(SR.GetString(SR.PPG_AddWin32ResourceFilter), "res"), _
-                        Common.Utils.GetAllFilesDialogFilter() _
-                        ), _
+            Dim fileNames As ArrayList = Common.Utils.GetFilesViaBrowse(ServiceProvider, Me.Handle, sInitialDirectory, SR.GetString(SR.PPG_AddWin32ResourceTitle),
+                    Common.CombineDialogFilters(
+                        Common.CreateDialogFilter(SR.GetString(SR.PPG_AddWin32ResourceFilter), "res"),
+                        Common.Utils.GetAllFilesDialogFilter()
+                        ),
                         0, False, sFileName)
             If fileNames IsNot Nothing AndAlso fileNames.Count = 1 Then
                 sFileName = CStr(fileNames(0))
@@ -565,25 +574,21 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
         ''' Fill up the allowed values in the target framework listbox
         ''' </summary>
         ''' <remarks></remarks>
-
-#If FX_ATLEAST_45 Then
-        'REVIEW: Are the periods in my version strings culture-safe?
         Private Function ValidateTargetFrameworkMoniker(ByVal moniker As String) As Boolean
-            If moniker = "" Or moniker = Nothing Then
+            If String.IsNullOrWhiteSpace(moniker) Then
                 Return False
-            End If
-            If moniker.Contains("v2") Then
-                Return Me.m_v20FSharpRedistInstalled
-            End If
-            If moniker.Contains("v3.0") Then
-                Return Me.m_v20FSharpRedistInstalled
-            End If
-            If moniker.Contains("v3.5") Then
-                Return Me.m_v20FSharpRedistInstalled
-            End If
-            '' Is this cheating?
-            If moniker.Contains("v4") Then
-                Return Me.m_v40FSharpRedistInstalled
+            ElseIf moniker.StartsWith(".NETCoreApp", StringComparison.OrdinalIgnoreCase) Then
+                If Me.OutputType.SelectedIndex <> INDEX_INVALID Then    ' NetCore always include
+                    ' .NET Core and .NETStandard don't need redists to be installed.
+                    Return True
+                End If
+            ElseIf moniker.StartsWith(".NETStandard", StringComparison.OrdinalIgnoreCase) Then
+                If Me.OutputType.SelectedIndex = 2 Then                 ' NetStandard ClassLibrary only
+                    Return True
+                End If
+            ElseIf moniker.Contains("v2") OrElse moniker.Contains("v3.0") OrElse moniker.Contains("v3.5") OrElse moniker.Contains("v4") Then
+                ' With the latest tooling, if we have editors the redist is installed by definition
+                Return True
             End If
             Return False
         End Function
@@ -617,7 +622,7 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
 
         Private Sub PopulateAvailableFSharpCoreVersions()
             TargetFSharpCoreVersion.Items.Clear()
-            TargetFSharpCoreVersion.SelectedIndex = -1
+            TargetFSharpCoreVersion.SelectedIndex = INDEX_INVALID
 
             Dim currentFrameworkName As FrameworkName = GetCurrentFrameworkName(DTEProject)
             Dim siteServiceProvider As Microsoft.VisualStudio.OLE.Interop.IServiceProvider = Nothing
@@ -652,20 +657,32 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
 
         Private Sub PopulateTargetFrameworkAssemblies()
             Dim targetFrameworkSupported As Boolean = False
+            Dim selectedItem As String = Nothing
+            If Me.TargetFramework.SelectedIndex <> INDEX_INVALID Then
+                selectedItem = Me.TargetFramework.Text
+            End If
             Me.TargetFramework.Items.Clear()
-            Me.TargetFramework.SelectedIndex = -1
+            Me.TargetFramework.SelectedIndex = INDEX_INVALID
 
             Try
                 Dim sp As System.IServiceProvider = GetServiceProvider()
 
                 Dim vsFrameworkMultiTargeting As IVsFrameworkMultiTargeting = TryCast(sp.GetService(GetType(SVsFrameworkMultiTargeting)), IVsFrameworkMultiTargeting)
+                Dim slnSvc As IVsSolution = TryCast(sp.GetService(GetType(SVsSolution)), IVsSolution)
+
+                Dim hier As IVsHierarchy = Nothing
+                Dim isSdkProject = False
+                If slnSvc.GetProjectOfUniqueName(DTEProject.UniqueName, hier) = 0 Then
+                    isSdkProject = hier.IsCapabilityMatch("CPS")
+                End If
 
                 If vsFrameworkMultiTargeting IsNot Nothing Then
                     Dim currentFrameworkName As FrameworkName = GetCurrentFrameworkName(DTEProject)
                     Dim isPortable As Boolean = IsDotNetPortable(currentFrameworkName)
                     targetFrameworkSupported = True
 
-                    Dim supportedFrameworks As IEnumerable(Of TargetFrameworkMoniker) = TargetFrameworkMoniker.GetSupportedTargetFrameworkMonikers(vsFrameworkMultiTargeting, DTEProject)
+                    Dim supportedTargetFrameworksDescriptor As PropertyDescriptor = GetPropertyDescriptor("SupportedTargetFrameworks")
+                    Dim supportedFrameworks As IEnumerable(Of TargetFrameworkMoniker) = TargetFrameworkMoniker.GetSupportedTargetFrameworkMonikers(vsFrameworkMultiTargeting, DTEProject, isSdkProject, supportedTargetFrameworksDescriptor)
 
                     For Each supportedFramework As TargetFrameworkMoniker In supportedFrameworks
                         If Me.ValidateTargetFrameworkMoniker(supportedFramework.Moniker) Then
@@ -678,37 +695,12 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
                     Next
 
                 End If
-            Catch ex As Exception
-                targetFrameworkSupported = False
-                Me.TargetFramework.Items.Clear()
-            End Try
 
-            If Not targetFrameworkSupported Then
-                Me.TargetFramework.Enabled = False
-            End If
-        End Sub
-#Else
-        Private Sub PopulateTargetFrameworkAssemblies()
-            Dim targetFrameworkSupported As Boolean = False
-            Me.TargetFramework.Items.Clear()
-            Me.TargetFramework.SelectedIndex = INDEX_INVALID
-
-            Try
-
-                Dim siteServiceProvider As Microsoft.VisualStudio.OLE.Interop.IServiceProvider = Nothing
-                VSErrorHandler.ThrowOnFailure(MyBase.ProjectHierarchy.GetSite(siteServiceProvider))
-
-                Dim sp As New Shell.ServiceProvider(siteServiceProvider)
-                Dim vsTargetFrameworkAssemblies As IVsTargetFrameworkAssemblies = TryCast(sp.GetService(GetType(SVsTargetFrameworkAssemblies).GUID), IVsTargetFrameworkAssemblies)
-                If vsTargetFrameworkAssemblies IsNot Nothing Then
-                    Dim targetFrameworks As IEnumerable(Of Common.TargetFrameworkAssemblies.TargetFramework) _
-                        = Common.TargetFrameworkAssemblies.GetSupportedTargetFrameworkAssemblies(vsTargetFrameworkAssemblies)
-                    For Each target As Common.TargetFrameworkAssemblies.TargetFramework In targetFrameworks
-                        Me.TargetFramework.Items.Add(target)
-                    Next
-
-                    targetFrameworkSupported = True
+                ' Put back previous value
+                If Not IsNothing(selectedItem) Then
+                    Me.TargetFramework.Text = selectedItem
                 End If
+
             Catch ex As Exception
                 targetFrameworkSupported = False
                 Me.TargetFramework.Items.Clear()
@@ -718,7 +710,7 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
                 Me.TargetFramework.Enabled = False
             End If
         End Sub
-#End If
+
         Private Function SetTargetFSharpCore(ByVal control As Control, ByVal prop As PropertyDescriptor, ByVal value As Object) As Boolean
             Dim combobox As ComboBox = CType(control, ComboBox)
             combobox.SelectedIndex = INDEX_INVALID
@@ -748,7 +740,6 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
             Return False
         End Function
 
-#If FX_ATLEAST_45 Then
         ''' <summary>
         ''' Takes the current value of the TargetFramework property (in UInt32 format), and sets
         '''   the current dropdown list to that value.
@@ -777,27 +768,6 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
             Return True
         End Function
 
-#Else
-
-        Private Function SetTargetFramework(ByVal control As Control, ByVal prop As PropertyDescriptor, ByVal value As Object) As Boolean
-            Dim combobox As ComboBox = CType(control, ComboBox)
-            combobox.SelectedIndex = INDEX_INVALID
-            If PropertyControlData.IsSpecialValue(value) Then 'Indeterminate or IsMissing
-                'Leave it unselected
-            Else
-                Dim uintValue As UInteger = DirectCast(value, UInteger)
-                For Each entry As Common.TargetFrameworkAssemblies.TargetFramework In combobox.Items
-                    If entry.Version = uintValue Then
-                        combobox.SelectedItem = entry
-                        Exit For
-                    End If
-                Next
-            End If
-
-            Return True
-        End Function
-
-#End If
 
         ''' <summary>
         ''' Retrieves the current value of the TargetFramework dropdown text and converts it into
@@ -810,7 +780,6 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
         ''' <returns></returns>
         ''' <remarks></remarks>
 
-#If FX_ATLEAST_45 Then
         Private Function GetTargetFramework(ByVal control As Control, ByVal prop As PropertyDescriptor, ByRef value As Object) As Boolean
             Dim currentTarget As TargetFrameworkMoniker = CType(CType(control, ComboBox).SelectedItem, TargetFrameworkMoniker)
             If currentTarget IsNot Nothing Then
@@ -822,20 +791,10 @@ Namespace Microsoft.VisualStudio.Editors.PropertyPages
             Return False
         End Function
 
-#Else
+        Private Sub Win32ResourceFile_TextChanged(sender As Object, e As EventArgs) Handles Win32ResourceFile.TextChanged
 
-        Private Function GetTargetFramework(ByVal control As Control, ByVal prop As PropertyDescriptor, ByRef value As Object) As Boolean
-            Dim currentTarget As Common.TargetFrameworkAssemblies.TargetFramework = CType(CType(control, ComboBox).SelectedItem, Common.TargetFrameworkAssemblies.TargetFramework)
-            If currentTarget IsNot Nothing Then
-                value = currentTarget.Version
-                Return True
-            End If
+        End Sub
 
-            Debug.Fail("The combobox should not have still been unselected yet be dirty")
-            Return False
-        End Function
-
-#End If
 
 #End Region
 

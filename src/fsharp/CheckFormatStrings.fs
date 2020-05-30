@@ -1,19 +1,17 @@
-// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
-module internal Microsoft.FSharp.Compiler.CheckFormatStrings
+module internal FSharp.Compiler.CheckFormatStrings
 
-open Internal.Utilities
-open Microsoft.FSharp.Compiler 
-open Microsoft.FSharp.Compiler.AbstractIL 
-open Microsoft.FSharp.Compiler.AbstractIL.Internal 
-open Microsoft.FSharp.Compiler.AbstractIL.Internal.Library 
-open Microsoft.FSharp.Compiler.Ast
-open Microsoft.FSharp.Compiler.Range
-open Microsoft.FSharp.Compiler.ErrorLogger
-open Microsoft.FSharp.Compiler.Tast
-open Microsoft.FSharp.Compiler.Tastops
-open Microsoft.FSharp.Compiler.TcGlobals
-open Microsoft.FSharp.Compiler.ConstraintSolver
+open FSharp.Compiler 
+open FSharp.Compiler.AbstractIL.Internal.Library 
+open FSharp.Compiler.ConstraintSolver
+open FSharp.Compiler.NameResolution
+open FSharp.Compiler.Range
+open FSharp.Compiler.SyntaxTree
+open FSharp.Compiler.SyntaxTreeOps
+open FSharp.Compiler.TypedTree
+open FSharp.Compiler.TypedTreeOps
+open FSharp.Compiler.TcGlobals
 
 type FormatItem = Simple of TType | FuncAndVal 
 
@@ -24,20 +22,18 @@ let copyAndFixupFormatTypar m tp =
 let lowestDefaultPriority = 0 (* See comment on TyparConstraint.DefaultsTo *)
 
 let mkFlexibleFormatTypar m tys dflt = 
-    let tp = NewTypar (TyparKind.Type,TyparRigidity.Rigid,Typar(mkSynId m "fmt",HeadTypeStaticReq,true),false,TyparDynamicReq.Yes,[],false,false)
-    tp.FixupConstraints [ TyparConstraint.SimpleChoice (tys,m); TyparConstraint.DefaultsTo (lowestDefaultPriority,dflt,m)]
+    let tp = Construct.NewTypar (TyparKind.Type,TyparRigidity.Rigid,Typar(mkSynId m "fmt",HeadTypeStaticReq,true),false,TyparDynamicReq.Yes,[],false,false)
+    tp.SetConstraints [ TyparConstraint.SimpleChoice (tys,m); TyparConstraint.DefaultsTo (lowestDefaultPriority,dflt,m)]
     copyAndFixupFormatTypar m tp
 
-let mkFlexibleIntFormatTypar g m = 
+let mkFlexibleIntFormatTypar (g: TcGlobals) m = 
     mkFlexibleFormatTypar m [ g.byte_ty; g.int16_ty; g.int32_ty; g.int64_ty;  g.sbyte_ty; g.uint16_ty; g.uint32_ty; g.uint64_ty;g.nativeint_ty;g.unativeint_ty; ] g.int_ty
 
-let mkFlexibleDecimalFormatTypar g m =
+let mkFlexibleDecimalFormatTypar (g: TcGlobals) m =
     mkFlexibleFormatTypar m [ g.decimal_ty ] g.decimal_ty
     
-let mkFlexibleFloatFormatTypar g m = 
+let mkFlexibleFloatFormatTypar (g: TcGlobals) m = 
     mkFlexibleFormatTypar m [ g.float_ty; g.float32_ty; g.decimal_ty ] g.float_ty
-
-let isDigit c = ('0' <= c && c <= '9')
 
 type FormatInfoRegister = 
   { mutable leftJustify    : bool 
@@ -45,33 +41,29 @@ type FormatInfoRegister =
     mutable addZeros       : bool
     mutable precision      : bool}
 
-let newInfo ()= 
+let newInfo () = 
   { leftJustify    = false
     numPrefixIfPos = None
     addZeros       = false
     precision      = false}
 
-let parseFormatStringInternal (m:range) g (source: string option) fmt bty cty = 
+let parseFormatStringInternal (m:range) (g: TcGlobals) (context: FormatStringCheckContext option) fmt bty cty = 
     // Offset is used to adjust ranges depending on whether input string is regular, verbatim or triple-quote.
     // We construct a new 'fmt' string since the current 'fmt' string doesn't distinguish between "\n" and escaped "\\n".
     let (offset, fmt) = 
-        match source with
-        | Some source ->
-            let source = source.Replace("\r\n", "\n").Replace("\r", "\n")
-            let positions =
-                source.Split('\n')
-                |> Seq.map (fun s -> String.length s + 1)
-                |> Seq.scan (+) 0
-                |> Seq.toArray
-            let length = source.Length
-            if m.EndLine < positions.Length then
-                let startIndex = positions.[m.StartLine-1] + m.StartColumn
-                let endIndex = positions.[m.EndLine-1] + m.EndColumn - 1
-                if startIndex < length-3 && source.[startIndex..startIndex+2] = "\"\"\"" then
-                    (3, source.[startIndex+3..endIndex-3])
-                elif startIndex < length-2 && source.[startIndex..startIndex+1] = "@\"" then
-                    (2, source.[startIndex+2..endIndex-1])
-                else (1, source.[startIndex+1..endIndex-1])
+        match context with
+        | Some context ->
+            let sourceText = context.SourceText
+            let lineStartPositions = context.LineStartPositions
+            let length = sourceText.Length
+            if m.EndLine < lineStartPositions.Length then
+                let startIndex = lineStartPositions.[m.StartLine-1] + m.StartColumn
+                let endIndex = lineStartPositions.[m.EndLine-1] + m.EndColumn - 1
+                if startIndex < length-3 && sourceText.SubTextEquals("\"\"\"", startIndex) then
+                    (3, sourceText.GetSubTextString(startIndex + 3, endIndex - startIndex))
+                elif startIndex < length-2 && sourceText.SubTextEquals("@\"", startIndex) then
+                    (2, sourceText.GetSubTextString(startIndex + 2, endIndex + 1 - startIndex))
+                else (1, sourceText.GetSubTextString(startIndex + 1, endIndex - startIndex))
             else (1, fmt)
         | None -> (1, fmt)
 
@@ -124,13 +116,13 @@ let parseFormatStringInternal (m:range) g (source: string option) fmt bty cty =
               let rec digitsPrecision i = 
                 if i >= len then failwithf "%s" <| FSComp.SR.forBadPrecision()
                 match fmt.[i] with
-                | c when isDigit c -> digitsPrecision (i+1)
+                | c when System.Char.IsDigit c -> digitsPrecision (i+1)
                 | _ -> i 
 
               let precision i = 
                 if i >= len then failwithf "%s" <| FSComp.SR.forBadWidth()
                 match fmt.[i] with
-                | c when isDigit c -> info.precision <- true; false,digitsPrecision (i+1)
+                | c when System.Char.IsDigit c -> info.precision <- true; false,digitsPrecision (i+1)
                 | '*' -> info.precision <- true; true,(i+1)
                 | _ -> failwithf "%s" <| FSComp.SR.forPrecisionMissingAfterDot()
 
@@ -143,20 +135,20 @@ let parseFormatStringInternal (m:range) g (source: string option) fmt bty cty =
               let rec digitsWidthAndPrecision i = 
                 if i >= len then failwithf "%s" <| FSComp.SR.forBadPrecision()
                 match fmt.[i] with
-                | c when isDigit c -> digitsWidthAndPrecision (i+1)
+                | c when System.Char.IsDigit c -> digitsWidthAndPrecision (i+1)
                 | _ -> optionalDotAndPrecision i
 
               let widthAndPrecision i = 
                 if i >= len then failwithf "%s" <| FSComp.SR.forBadPrecision()
                 match fmt.[i] with
-                | c when isDigit c -> false,digitsWidthAndPrecision i
+                | c when System.Char.IsDigit c -> false,digitsWidthAndPrecision i
                 | '*' -> true,optionalDotAndPrecision (i+1)
                 | _ -> false,optionalDotAndPrecision i
 
               let rec digitsPosition n i =
                   if i >= len then failwithf "%s" <| FSComp.SR.forBadPrecision()
                   match fmt.[i] with
-                  | c when isDigit c -> digitsPosition (n*10 + int c - int '0') (i+1)
+                  | c when System.Char.IsDigit c -> digitsPosition (n*10 + int c - int '0') (i+1)
                   | '$' -> Some n, i+1
                   | _ -> None, i
 
@@ -195,27 +187,30 @@ let parseFormatStringInternal (m:range) g (source: string option) fmt bty cty =
                   checkNoZeroFlag c 
                   checkNoNumericPrefix c
 
-              let collectSpecifierLocation relLine relCol = 
+              let collectSpecifierLocation relLine relCol numStdArgs = 
+                  let numArgsForSpecifier =
+                    numStdArgs + (if widthArg then 1 else 0) + (if precisionArg then 1 else 0)
                   match relLine with
                   | 0 ->
                       specifierLocations.Add(
-                        Range.mkFileIndexRange m.FileIndex 
+                        (Range.mkFileIndexRange m.FileIndex 
                                 (Range.mkPos m.StartLine (startCol + offset)) 
-                                (Range.mkPos m.StartLine (relCol + offset)))
+                                (Range.mkPos m.StartLine (relCol + offset + 1))), numArgsForSpecifier)
                   | _ ->
                       specifierLocations.Add(
-                        Range.mkFileIndexRange m.FileIndex 
+                        (Range.mkFileIndexRange m.FileIndex 
                                 (Range.mkPos (m.StartLine + relLine) startCol) 
-                                (Range.mkPos (m.StartLine + relLine) relCol))
+                                (Range.mkPos (m.StartLine + relLine) (relCol + 1))), numArgsForSpecifier)
 
               let ch = fmt.[i]
               match ch with
-              | '%' -> 
+              | '%' ->
+                  collectSpecifierLocation relLine relCol 0
                   parseLoop acc (i+1, relLine, relCol+1) 
 
               | ('d' | 'i' | 'o' | 'u' | 'x' | 'X') ->
                   if info.precision then failwithf "%s" <| FSComp.SR.forFormatDoesntSupportPrecision(ch.ToString())
-                  collectSpecifierLocation relLine relCol
+                  collectSpecifierLocation relLine relCol 1
                   parseLoop ((posi, mkFlexibleIntFormatTypar g m) :: acc) (i+1, relLine, relCol+1)
 
               | ('l' | 'L') ->
@@ -230,7 +225,7 @@ let parseFormatStringInternal (m:range) g (source: string option) fmt bty cty =
                   failwithf "%s" <| FSComp.SR.forLIsUnnecessary()
                   match fmt.[i] with
                   | ('d' | 'i' | 'o' | 'u' | 'x' | 'X') -> 
-                      collectSpecifierLocation relLine relCol
+                      collectSpecifierLocation relLine relCol 1
                       parseLoop ((posi, mkFlexibleIntFormatTypar g m) :: acc)  (i+1, relLine, relCol+1)
                   | _ -> failwithf "%s" <| FSComp.SR.forBadFormatSpecifier()
 
@@ -238,38 +233,38 @@ let parseFormatStringInternal (m:range) g (source: string option) fmt bty cty =
                   failwithf "%s" <| FSComp.SR.forHIsUnnecessary()
 
               | 'M' ->
-                  collectSpecifierLocation relLine relCol
+                  collectSpecifierLocation relLine relCol 1
                   parseLoop ((posi, mkFlexibleDecimalFormatTypar g m) :: acc) (i+1, relLine, relCol+1)
 
               | ('f' | 'F' | 'e' | 'E' | 'g' | 'G') ->
-                  collectSpecifierLocation relLine relCol
+                  collectSpecifierLocation relLine relCol 1
                   parseLoop ((posi, mkFlexibleFloatFormatTypar g m) :: acc) (i+1, relLine, relCol+1)
 
               | 'b' ->
                   checkOtherFlags ch
-                  collectSpecifierLocation relLine relCol
+                  collectSpecifierLocation relLine relCol 1
                   parseLoop ((posi, g.bool_ty)  :: acc) (i+1, relLine, relCol+1)
 
               | 'c' ->
                   checkOtherFlags ch
-                  collectSpecifierLocation relLine relCol
+                  collectSpecifierLocation relLine relCol 1
                   parseLoop ((posi, g.char_ty)  :: acc) (i+1, relLine, relCol+1)
 
               | 's' ->
                   checkOtherFlags ch
-                  collectSpecifierLocation relLine relCol
+                  collectSpecifierLocation relLine relCol 1
                   parseLoop ((posi, g.string_ty)  :: acc) (i+1, relLine, relCol+1)
 
               | 'O' ->
                   checkOtherFlags ch
-                  collectSpecifierLocation relLine relCol
+                  collectSpecifierLocation relLine relCol 1
                   parseLoop ((posi, NewInferenceType ()) :: acc) (i+1, relLine, relCol+1)
 
               | 'A' ->
                   match info.numPrefixIfPos with
                   | None     // %A has BindingFlags=Public, %+A has BindingFlags=Public | NonPublic
                   | Some '+' -> 
-                      collectSpecifierLocation relLine relCol
+                      collectSpecifierLocation relLine relCol 1
                       parseLoop ((posi, NewInferenceType ()) :: acc)  (i+1, relLine, relCol+1)
                   | Some _   -> failwithf "%s" <| FSComp.SR.forDoesNotSupportPrefixFlag(ch.ToString(), (Option.get info.numPrefixIfPos).ToString())
 
@@ -277,12 +272,12 @@ let parseFormatStringInternal (m:range) g (source: string option) fmt bty cty =
                   checkOtherFlags ch
                   let xty = NewInferenceType () 
                   let fty = bty --> (xty --> cty)
-                  collectSpecifierLocation relLine relCol
+                  collectSpecifierLocation relLine relCol 2
                   parseLoop ((Option.map ((+)1) posi, xty) ::  (posi, fty) :: acc) (i+1, relLine, relCol+1)
 
               | 't' ->
                   checkOtherFlags ch
-                  collectSpecifierLocation relLine relCol
+                  collectSpecifierLocation relLine relCol 1
                   parseLoop ((posi, bty --> cty) :: acc)  (i+1, relLine, relCol+1)
 
               | c -> failwithf "%s" <| FSComp.SR.forBadFormatSpecifierGeneral(String.make 1 c) 
@@ -293,8 +288,8 @@ let parseFormatStringInternal (m:range) g (source: string option) fmt bty cty =
     let results = parseLoop [] (0, 0, m.StartColumn)
     results, Seq.toList specifierLocations
 
-let ParseFormatString m g source fmt bty cty dty = 
-    let argtys, specifierLocations = parseFormatStringInternal m g source fmt bty cty
+let ParseFormatString m g formatStringCheckContext fmt bty cty dty = 
+    let argtys, specifierLocations = parseFormatStringInternal m g formatStringCheckContext fmt bty cty
     let aty = List.foldBack (-->) argtys dty
     let ety = mkRefTupledTy g argtys
     (aty, ety), specifierLocations 

@@ -24,7 +24,7 @@
 //<Expects status="success">section='- CODE GENERATION -      ' ! option=tailcalls                      kind=OptionSwitch</Expects>
 //<Expects status="success">section='- CODE GENERATION -      ' ! option=crossoptimize                  kind=OptionSwitch</Expects>
 //<Expects status="success">section='- ERRORS AND WARNINGS -  ' ! option=warnaserror                    kind=OptionSwitch</Expects>
-//<Expects status="success">section='- ERRORS AND WARNINGS -  ' ! option=warnaserror                    kind=OptionIntListSwitch</Expects>
+//<Expects status="success">section='- ERRORS AND WARNINGS -  ' ! option=warnaserror                    kind=OptionStringListSwitch</Expects>
 //<Expects status="success">section='- ERRORS AND WARNINGS -  ' ! option=warn                           kind=OptionInt</Expects>
 //<Expects status="success">section='- ERRORS AND WARNINGS -  ' ! option=nowarn                         kind=OptionStringList</Expects>
 //<Expects status="success">section='- ERRORS AND WARNINGS -  ' ! option=warnon                         kind=OptionStringList</Expects>
@@ -39,6 +39,7 @@
 //<Expects status="success">section='- ADVANCED -             ' ! option=fullpaths                      kind=OptionUnit</Expects>
 //<Expects status="success">section='- ADVANCED -             ' ! option=lib                            kind=OptionStringList</Expects>
 //<Expects status="success">section='- ADVANCED -             ' ! option=baseaddress                    kind=OptionString</Expects>
+//<Expects status="success">section='- ADVANCED -             ' ! option=checksumalgorithm              kind=OptionString</Expects>
 //<Expects status="success">section='- ADVANCED -             ' ! option=noframework                    kind=OptionUnit</Expects>
 //<Expects status="success">section='- ADVANCED -             ' ! option=standalone                     kind=OptionUnit</Expects>
 //<Expects status="success">section='- ADVANCED -             ' ! option=staticlink                     kind=OptionString</Expects>
@@ -141,6 +142,7 @@
 //<Expects status="notin">section='NoSection                ' ! option=script.fsx arg1 arg2 ...       kind=OptionGeneral</Expects>
 //<Expects status="notin">section='NoSection                ' ! option=probeconsole                   kind=OptionSwitch</Expects>
 //<Expects status="notin">section='NoSection                ' ! option=peekahead                      kind=OptionSwitch</Expects>
+//<Expects status="notin">section='NoSection                ' ! option=noninteractive                 kind=OptionUnit</Expects>
 //<Expects status="notin">section='- INPUT FILES -          ' ! option=--                             kind=OptionRest</Expects>
 //<Expects status="notin">section='- ADVANCED -             ' ! option=exec                           kind=OptionUnit</Expects>
 //<Expects status="notin">section='- ADVANCED -             ' ! option=gui                            kind=OptionSwitch</Expects>

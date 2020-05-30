@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
 namespace Microsoft.FSharp.Collections
 
@@ -23,14 +23,14 @@ namespace Microsoft.FSharp.Collections
                   member __.Equals(x,y) = LanguagePrimitives.PhysicalEquality x y }
 
         let inline NonStructural< 'T when 'T : equality and 'T  : (static member ( = ) : 'T * 'T    -> bool) > = 
-            { new IEqualityComparer< 'T > with
+            { new IEqualityComparer<'T> with
                   member __.GetHashCode(x) = NonStructuralComparison.hash x 
                   member __.Equals(x, y) = NonStructuralComparison.(=) x y  }
 
-        let inline FromFunctions hash eq : IEqualityComparer<'T> = 
-            let eq = OptimizedClosures.FSharpFunc<_,_,_>.Adapt(eq)
+        let inline FromFunctions hasher equality : IEqualityComparer<'T> = 
+            let eq = OptimizedClosures.FSharpFunc<_,_,_>.Adapt(equality)
             { new IEqualityComparer<'T> with 
-                member __.GetHashCode(x) = hash x
+                member __.GetHashCode(x) = hasher x
                 member __.Equals(x,y) = eq.Invoke(x,y)  }
 
 
@@ -39,12 +39,9 @@ namespace Microsoft.FSharp.Collections
         let inline Structural<'T when 'T : comparison > : IComparer<'T> = 
             LanguagePrimitives.FastGenericComparer<'T>
 
-#if BUILDING_WITH_LKG
-#else
-        let inline NonStructural< 'T when 'T : (static member ( < ) : 'T * 'T    -> bool) and 'T : (static member ( > ) : 'T * 'T    -> bool) > : IComparer< 'T > = 
+        let inline NonStructural< 'T when 'T : (static member ( < ) : 'T * 'T    -> bool) and 'T : (static member ( > ) : 'T * 'T    -> bool) > : IComparer<'T> = 
             { new IComparer<'T> with
                   member __.Compare(x,y) = NonStructuralComparison.compare x y } 
-#endif
 
         let FromFunction comparer = 
             let comparer = OptimizedClosures.FSharpFunc<'T,'T,int>.Adapt(comparer)

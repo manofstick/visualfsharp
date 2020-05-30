@@ -118,3 +118,11 @@ module TypeParamAttributesDifferent =
 type ThisLibAssembly = X | Y
 
 
+#if !NETCOREAPP
+module Bug719 = 
+
+    open System.Runtime.InteropServices
+
+    type IFoo =
+        abstract Test : [<DefaultParameterValueAttribute(null)>]?value:int -> string
+#endif

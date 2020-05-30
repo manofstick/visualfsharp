@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<!-- Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information. -->
+<!-- Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information. -->
 <root>
   <!-- 
     Microsoft ResX Schema 
@@ -148,4 +148,14 @@
   <data name="FSharpInteractiveDebugging" xml:space="preserve">
     <value>Debugging</value>
   </data>
+  <data name="FSharpInteractivePreview" xml:space="preserve">
+    <value>FSI Preview</value>
+  </data>
+  <data name="FSharpInteractivePreviewModeDescr" xml:space="preserve">
+    <value>Enable preview of in-development language features in F# Interactive</value>
+  </data>
+  <data name="FSharpInteractivePreviewMode" xml:space="preserve">
+    <value>Enable preview language features</value>
+  </data>
+
 </root>

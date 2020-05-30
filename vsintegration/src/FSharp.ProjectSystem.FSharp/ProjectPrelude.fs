@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft Corporation.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+// Copyright (c) Microsoft Corporation.  All Rights Reserved.  See License.txt in the project root for license information.
 
 
 //--------------------------------------------------------------------------------------
@@ -39,7 +39,6 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
 
     open Microsoft.VisualStudio.Shell
     open Microsoft.VisualStudio.Shell.Interop
-    open Microsoft.VisualStudio.Shell.Flavor
     open Microsoft.VisualStudio.OLE.Interop
     open Microsoft.VisualStudio.FSharp.ProjectSystem.Automation
     open Microsoft.VisualStudio
@@ -48,10 +47,6 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
     open System
 
     type IOleServiceProvider = Microsoft.VisualStudio.OLE.Interop.IServiceProvider
-    type ErrorHandler = Microsoft.VisualStudio.ErrorHandler
-    type VSConstants = Microsoft.VisualStudio.VSConstants
-    type VsCommands = Microsoft.VisualStudio.VSConstants.VSStd97CmdID
-    type VsCommands2K = Microsoft.VisualStudio.VSConstants.VSStd2KCmdID
 
     module internal FSharpSDKHelper = 
         [<Literal>]
@@ -127,117 +122,6 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
     open Helpers
 
     //--------------------------------------------------------------------------------------
-    // The Resource Reader
-
-    module internal FSharpSR =
-        [<Literal>] 
-        let   ProjectReferenceError2 = "ProjectReferenceError2"
-        [<Literal>] 
-        let   Application = "Application"
-        [<Literal>] 
-        let   ApplicationIcon = "ApplicationIcon"
-        [<Literal>] 
-        let   ApplicationIconDescription = "ApplicationIconDescription"
-        [<Literal>] 
-        let   AssemblyName = "AssemblyName"
-        [<Literal>] 
-        let   AssemblyNameDescription = "AssemblyNameDescription"
-        [<Literal>] 
-        let   DefaultNamespace = "DefaultNamespace"
-        [<Literal>] 
-        let   DefaultNamespaceDescription = "DefaultNamespaceDescription"
-        [<Literal>] 
-        let   GeneralCaption = "GeneralCaption"
-        [<Literal>] 
-        let   InvalidOutputType = "InvalidOutputType"
-        [<Literal>] 
-        let   InvalidRunPostBuildEvent = "InvalidRunPostBuildEvent"
-        [<Literal>] 
-        let   InvalidTargetFrameworkVersion = "InvalidTargetFrameworkVersion"
-        [<Literal>] 
-        let   OutputFile = "OutputFile"
-        [<Literal>] 
-        let   OutputFileDescription = "OutputFileDescription"
-        [<Literal>] 
-        let   OutputType = "OutputType"
-        [<Literal>] 
-        let   OutputTypeDescription = "OutputTypeDescription"
-        [<Literal>] 
-        let   Project = "Project"
-        [<Literal>] 
-        let   ProjectFile = "ProjectFile"
-        [<Literal>] 
-        let   ProjectFileDescription = "ProjectFileDescription"
-        [<Literal>] 
-        let   ProjectFileExtensionFilter = "ProjectFileExtensionFilter"
-        [<Literal>] 
-        let   ComponentFileExtensionFilter = "ComponentFileExtensionFilter"
-        [<Literal>] 
-        let   ProjectFolder = "ProjectFolder"
-        [<Literal>] 
-        let   ProjectRenderFolderMultiple = "ProjectRenderFolderMultiple"
-        [<Literal>] 
-        let   ProjectFolderDescription = "ProjectFolderDescription"
-        [<Literal>] 
-        let   PropertyDefaultNamespace = "PropertyDefaultNamespace"
-        [<Literal>] 
-        let   StartupObject = "StartupObject"
-        [<Literal>] 
-        let   StartupObjectDescription = "StartupObjectDescription"
-        [<Literal>] 
-        let   TargetPlatform = "TargetPlatform"
-        [<Literal>] 
-        let   TargetPlatformDescription = "TargetPlatformDescription"
-        [<Literal>] 
-        let   TargetPlatformLocation = "TargetPlatformLocation"
-        [<Literal>] 
-        let   TargetPlatformLocationDescription = "TargetPlatformLocationDescription"
-        [<Literal>]
-        let   OtherFlags = "OtherFlags"
-        [<Literal>]
-        let   OtherFlagsDescription = "OtherFlagsDescription"
-        [<Literal>]
-        let   Tailcalls = "Tailcalls"
-        [<Literal>]
-        let   TailcallsDescription = "TailcallsDescription"
-        [<Literal>]
-        let   TemplateNotFound = "TemplateNotFound"
-        [<Literal>]
-        let   NeedReloadToChangeTargetFx = "NeedReloadToChangeTargetFx" 
-        [<Literal>]
-        let   NeedReloadToChangeTargetFxCaption = "NeedReloadToChangeTargetFxCaption"
-        [<Literal>]
-        let   Build = "Build"
-        [<Literal>]
-        let AddReferenceDialogTitle = "AddReferenceDialogTitle";
-        [<Literal>]
-        let AddReferenceDialogTitleDev11 = "AddReferenceDialogTitle_Dev11";
-        [<Literal>]
-        let Dev11SupportsOnlySilverlight5 = "Dev11SupportsOnlySilverlight5";
-        [<Literal>]
-        let AddReferenceAssemblyPageDialogRetargetingText = "AddReferenceAssemblyPageDialogRetargetingText";
-        [<Literal>]
-        let AddReferenceAssemblyPageDialogNoItemsText = "AddReferenceAssemblyPageDialogNoItemsText";
-        [<Literal>]
-        let FSharpCoreVersionIsNotLegacyCompatible = "FSharpCoreVersionIsNotLegacyCompatible";
-
-
-        type private TypeInThisAssembly = class end
-        let thisAssembly = typeof<TypeInThisAssembly>.Assembly 
-
-        let private resources = lazy (new System.Resources.ResourceManager("VSPackage", thisAssembly))
-
-        let GetString(name:string) = 
-            resources.Force().GetString(name, CultureInfo.CurrentUICulture)
-            
-        let GetStringWithCR(name:string) = 
-            let s = resources.Force().GetString(name, CultureInfo.CurrentUICulture)
-            s.Replace(@"\n", Environment.NewLine)
-
-        let GetObject(name:string) =
-            resources.Force().GetObject(name, CultureInfo.CurrentUICulture)
-
-    //--------------------------------------------------------------------------------------
     // Attributes used to mark up editable properties 
 
     [<AttributeUsage(AttributeTargets.All)>]
@@ -272,9 +156,6 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
     // Some more constants
 
     module internal GuidList =
-        let guidEditorFactory = new Guid("{4EB7CCB7-4336-4FFD-B12B-396E9FD079A9}")
-        [<Literal>]
-        let guidEditorFactoryString = "4EB7CCB7-4336-4FFD-B12B-396E9FD079A9"
         [<Literal>]
         let guidFSharpProjectPkgString = "91A04A73-4F2C-4E7C-AD38-C1A68E7DA05C"
         [<Literal>]
@@ -359,3 +240,4 @@ namespace Microsoft.VisualStudio.FSharp.ProjectSystem
         [<assembly: CLSCompliant(false)>]
 #endif
         do()
+
